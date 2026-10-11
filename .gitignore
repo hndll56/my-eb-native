@@ -43,3 +43,43 @@ docs/plans/
 *.sav.*
 *.srm
 *.srm.*
+
+# Local secrets and credentials (never commit real values)
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+secrets.json
+secrets.*
+*.local
+
+# Local editor/AI-agent state and machine-specific configuration
+.claude/
+.vscode/
+.idea/
+.history/
+
+# ROMs, saves, dumps, crash output, and local artifacts
+*.smc
+*.rom
+*.iso
+*.savestate
+*.state
+*.dump
+*.dmp
+*.core
+core
+core.*
+*.sqlite
+*.sqlite3
+*.db
+.DS_Store
+Thumbs.db
+desktop.ini
