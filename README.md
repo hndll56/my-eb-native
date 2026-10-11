@@ -97,7 +97,53 @@ sudo dnf install git make cmake gcc gcc-c++ pkgconf-pkg-config SDL2-devel python
 brew install git make cmake sdl2 pkg-config python
 ```
 
-Use Python 3.10 or newer. On Windows, use **WSL2 with Ubuntu** for the documented build workflow; a native Windows build is not currently documented or verified here.
+Use Python 3.10 or newer.
+
+### Windows 10 / 11 (using WSL2 + Ubuntu)
+
+The repository currently documents a Unix-style build, so the recommended Windows route is to build inside **WSL2** rather than running `make unix` directly in PowerShell.
+
+1. Open **PowerShell as Administrator** and install WSL with Ubuntu:
+
+   ```powershell
+   wsl --install -d Ubuntu
+   ```
+
+2. Restart Windows if prompted. Open **Ubuntu** from the Start menu and create your Linux username and password when asked.
+3. In the Ubuntu terminal, install the build dependencies:
+
+   ```bash
+   sudo apt update
+   sudo apt upgrade -y
+   sudo apt install git make cmake build-essential pkg-config libsdl2-dev python3 python3-venv python3-pip
+   ```
+
+4. Clone the repository inside Ubuntu's Linux home directory (recommended for build performance), then initialize its submodules:
+
+   ```bash
+   cd ~
+   git clone https://github.com/hndll56/my-eb-native.git
+   cd my-eb-native
+   git submodule update --init --recursive
+   ```
+
+5. Copy your legally obtained compatible US EarthBound ROM into this repository folder and name it `earthbound.sfc`. Do not commit or upload the ROM or extracted game assets.
+6. Build and launch from the same Ubuntu terminal:
+
+   ```bash
+   make unix
+   ./port/unix/build/earthbound
+   ```
+
+   To run the available tests afterward:
+
+   ```bash
+   ctest --test-dir port/unix/build --output-on-failure
+   ```
+
+**Display note:** opening the SDL2 game window from WSL requires a working Linux GUI setup (WSLg is included with supported Windows 11/updated WSL installations). If the build succeeds but the window cannot open, check that WSL and its GUI support are up to date.
+
+**Native Windows build:** compiling directly with PowerShell, Visual Studio, or MinGW is not documented or verified by this repository yet. The steps above build the Unix target inside WSL2; they do not establish a native Windows executable.
 
 ### 3. Provide your own game ROM
 
