@@ -1,0 +1,56 @@
+name: Espressif Component Registry
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'espidf/**'
+      - 'tamp/_c_src/**'
+      - '.github/workflows/esp_upload_component.yml'
+  push:
+    tags:
+      - 'v*.*.*'
+    paths:
+      - 'espidf/**'
+      - 'tamp/_c_src/**'
+      - '.github/workflows/esp_upload_component.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upload_components:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install compote
+        run: |
+          pip install "idf-component-manager~=1.3"
+
+      - name: Build package
+        working-directory: ./espidf/tamp
+        run: |
+          make component
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp-idf-component
+          path: espidf/tamp/dist/*.tgz
+
+      - name: Publish to ESP Component Registry
+        if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags/v')
+        working-directory: ./espidf/tamp
+        env:
+          IDF_COMPONENT_API_TOKEN: ${{ secrets.ESP_IDF_COMPONENT_API_TOKEN }}
+        run: |
+          compote component upload --namespace=brianpugh --name=tamp --version=git

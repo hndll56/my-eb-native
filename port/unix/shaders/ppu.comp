@@ -1,0 +1,327 @@
+#version 450
+// GPU port of src/snes/ppu_render.c (native 256x224 viewport). One invocation shades two
+// horizontally adjacent pixels and writes them packed as BGR565 pixel_t, so the result can be
+// copied straight into the presentation texture. Semantics (priorities, window masks, mosaic,
+// color math, brightness) follow the CPU renderer exactly; test with the --gpu-compare mode.
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(std430, binding = 0) readonly buffer In { uint d[]; };
+layout(std430, binding = 1) writeonly buffer Out { uint o[]; };
+
+// ---- layout of the input buffer (in uint words); mirrors vk_ppu in vk_renderer.c ----
+const int OFF_PAL = 64, OFF_WH = 320, OFF_TMTS = 1216, OFF_DIST = 1664, OFF_OBJ = 1888, OFF_VRAM = 2400;
+const int H = 224;
+
+// register indices
+const int R_INIDISP = 0, R_OBSEL = 1, R_BGMODE = 2, R_MOSAIC = 3, R_BGSC = 4, R_NBA = 8, R_HOFS = 10,
+          R_VOFS = 14, R_TM = 18, R_TS = 19, R_TMW = 20, R_TSW = 21, R_CGWSEL = 22, R_CGADSUB = 23,
+          R_FIXED = 24, R_W12SEL = 25, R_W34SEL = 26, R_WOBJSEL = 27, R_WH0 = 28, R_WBGLOG = 32,
+          R_WOBJLOG = 33, R_WHDMA = 34, R_W2HDMA = 35, R_TMHDMA = 36, R_SPRYOFF = 37, R_DIST = 38,
+          R_BPP = 39, R_GP = 43, R_THRESH = 51, R_NOBJ = 56, R_MODE = 57, R_SPRXOFF = 58;
+
+int R(int i) { return int(d[i]); }
+int sext16(uint v) { return int(v << 16) >> 16; }
+
+int vbyte(int a) { return int((d[OFF_VRAM + (a >> 2)] >> ((a & 3) * 8)) & 0xFFu); }
+uint pal(int i) { return d[OFF_PAL + i]; }
+
+// ---------------------------------------------------------------- BG
+// Returns false when transparent. Mirrors render_bg_scanline + emit_tile_run for one pixel.
+bool bgPixel(int bg, int bpp, int sx, int scan, out uint col, out int prio) {
+    col = 0u; prio = 0;
+    int sc = R(R_BGSC + bg);
+    int tilemapBase = (sc & 0xFC) << 9;
+    int szH = (sc & 1) != 0 ? 64 : 32;
+    int szV = (sc & 2) != 0 ? 64 : 32;
+    int nba = (bg < 2) ? (R(R_NBA) >> (bg * 4)) : (R(R_NBA + 1) >> ((bg - 2) * 4));
+    nba &= 15;
+    int tileBase = nba * 0x2000;
+    int bpt = bpp == 8 ? 64 : (bpp == 4 ? 32 : 16);
+    bool big = ((R(R_BGMODE) >> (4 + bg)) & 1) != 0;
+    int tsize = big ? 16 : 8, tmask = tsize - 1, tshift = big ? 4 : 3;
+
+    int scrollX = R(R_HOFS + bg) & 0x3FF;
+    int scrollY = R(R_VOFS + bg) & 0x3FF;
+    if (bg == 1 && R(R_DIST) != 0) {
+        int dy = scan;
+        if (dy < 0) dy = -dy; else if (dy >= H) dy = 2 * (H - 1) - dy;
+        if (dy < 0) dy = 0; else if (dy >= H) dy = H - 1;
+        scrollX = (scrollX + sext16(d[OFF_DIST + dy])) & 0x3FF;
+    }
+    int wmask = szH * 8 - 1, hmask = szV * 8 - 1;
+    int y = (scan + scrollY) & hmask;
+    int worldX = (sx + scrollX) & wmask;
+    int rowMap = y >> tshift, colMap = worldX >> tshift;
+    int pyIn = y & tmask, xIn = worldX & tmask;
+
+    int mapAddr = tilemapBase;
+    int rowLocal = rowMap, colLocal = colMap;
+    if (szV == 64 && rowLocal >= 32) {
+        mapAddr += 32 * 32 * 2;
+        if (szH == 64) mapAddr += 32 * 32 * 2;
+        rowLocal -= 32;
+    }
+    if (szH == 64 && colLocal >= 32) { mapAddr += 32 * 32 * 2; colLocal -= 32; }
+    int ea = mapAddr + (rowLocal * 32 + colLocal) * 2;
+    if (ea + 1 >= 0x10000) return false;
+    int entry = vbyte(ea) | (vbyte(ea + 1) << 8);
+    int tileNum = entry & 0x3FF;
+    int palette = (entry >> 10) & 7;
+    prio = (entry >> 13) & 1;
+    bool hflip = ((entry >> 14) & 1) != 0, vflip = ((entry >> 15) & 1) != 0;
+
+    int effPy, px;
+    if (!big) {
+        effPy = vflip ? 7 - pyIn : pyIn;
+        px = hflip ? 7 - xIn : xIn;
+    } else {
+        int subY = pyIn >> 3, subPy = pyIn & 7;
+        int effSubY = vflip ? 1 - subY : subY;
+        effPy = vflip ? 7 - subPy : subPy;
+        int subX = xIn >> 3, inSub = xIn & 7;
+        int effSubX = hflip ? 1 - subX : subX;
+        tileNum = tileNum + effSubX + effSubY * 16;
+        px = hflip ? 7 - inSub : inSub;
+    }
+    int ta = tileBase + tileNum * bpt;
+    if (ta + bpt > 0x10000) return false;
+    int bit = 7 - px, ro = effPy * 2;
+    int idx = ((vbyte(ta + ro) >> bit) & 1) | (((vbyte(ta + ro + 1) >> bit) & 1) << 1);
+    if (bpp >= 4)
+        idx |= (((vbyte(ta + 16 + ro) >> bit) & 1) << 2) | (((vbyte(ta + 17 + ro) >> bit) & 1) << 3);
+    if (bpp == 8)
+        idx |= (((vbyte(ta + 32 + ro) >> bit) & 1) << 4) | (((vbyte(ta + 33 + ro) >> bit) & 1) << 5)
+             | (((vbyte(ta + 48 + ro) >> bit) & 1) << 6) | (((vbyte(ta + 49 + ro) >> bit) & 1) << 7);
+    if (idx == 0) return false;
+    int palBase = bpp == 8 ? 0 : (bpp == 4 ? palette * 16 : palette * 4);
+    col = pal(palBase + idx);
+    return true;
+}
+
+// ---------------------------------------------------------------- OBJ
+bool objPixel(int x, int scan, out uint col, out int pr) {
+    col = 0u; pr = 0;
+    int yoff = R(R_SPRYOFF);
+    if (yoff != 0) {
+        int s = scan - yoff;
+        if (s < 0 || s >= H) return false;
+    }
+    int objBase = (R(R_OBSEL) & 7) * 0x4000;
+    int objGap = ((R(R_OBSEL) >> 3) & 3) * 0x2000 + 0x2000;
+    int n = R(R_NOBJ);
+    for (int i = 0; i < n; i++) {           // list is in ascending OAM index: first hit wins
+        int b = OFF_OBJ + i * 4;
+        int sx = sext16(d[b]), sy = sext16(d[b + 1]);
+        uint pk = d[b + 2];
+        int w = int(pk & 0xFFu), h = int((pk >> 8) & 0xFFu), attr = int((pk >> 16) & 0xFFu);
+        int tileNum = int(d[b + 3]);
+        int row = scan - sy;
+        if (row < 0 || row >= h) continue;
+        int col0 = x - sx;
+        if (col0 < 0 || col0 >= w) continue;
+        bool vflip = ((attr >> 7) & 1) != 0, hflip = ((attr >> 6) & 1) != 0;
+        if (vflip) row = h - 1 - row;
+        int tileRow = row >> 3, pyT = row & 7;
+        int tilesWide = w >> 3;
+        int tc = col0 >> 3, pxi = col0 & 7;
+        int effTc = hflip ? tilesWide - 1 - tc : tc;
+        int t = tileNum + effTc + tileRow * 16;
+        int ta = t >= 256 ? objBase + objGap + (t - 256) * 32 : objBase + t * 32;
+        if (ta + 32 > 0x10000) continue;
+        int bit = 7 - (hflip ? 7 - pxi : pxi), ro = pyT * 2;
+        int idx = ((vbyte(ta + ro) >> bit) & 1) | (((vbyte(ta + ro + 1) >> bit) & 1) << 1)
+                | (((vbyte(ta + 16 + ro) >> bit) & 1) << 2) | (((vbyte(ta + 17 + ro) >> bit) & 1) << 3);
+        if (idx == 0) continue;
+        col = pal(128 + ((attr >> 1) & 7) * 16 + idx);
+        pr = ((attr >> 4) & 3) + 1;
+        return true;
+    }
+    return false;
+}
+
+// ---------------------------------------------------------------- windows
+const int LB[5] = int[5](1, 2, 4, 8, 16);
+
+bool winTest(int x, int l, int r, bool inv) { return ((x >= l && x <= r) != inv); }
+bool winLogic(int logic, bool a, bool b) {
+    if (logic == 0) return a || b;
+    if (logic == 1) return a && b;
+    if (logic == 2) return a != b;
+    return a == b;
+}
+
+void winPos(int scan, out int l1, out int r1, out int l2, out int r2) {
+    if (R(R_WHDMA) != 0) { l1 = int(d[OFF_WH + scan]); r1 = int(d[OFF_WH + H + scan]); }
+    else { l1 = R(R_WH0); r1 = R(R_WH0 + 1); }
+    if (R(R_W2HDMA) != 0) { l2 = int(d[OFF_WH + 2 * H + scan]); r2 = int(d[OFF_WH + 3 * H + scan]); }
+    else { l2 = R(R_WH0 + 2); r2 = R(R_WH0 + 3); }
+}
+
+// layers masked on (main, sub) at x
+ivec2 layerMask(int x, int scan) {
+    int tmw = R(R_TMW), tsw = R(R_TSW);
+    int all = tmw | tsw;
+    if (all == 0) return ivec2(0);
+    int l1, r1, l2, r2;
+    winPos(scan, l1, r1, l2, r2);
+    ivec2 m = ivec2(0);
+    for (int li = 0; li < 5; li++) {
+        int lb = LB[li];
+        if ((all & lb) == 0) continue;
+        int sel, logic;
+        if (li == 0) { sel = R(R_W12SEL) & 15; logic = R(R_WBGLOG) & 3; }
+        else if (li == 1) { sel = (R(R_W12SEL) >> 4) & 15; logic = (R(R_WBGLOG) >> 2) & 3; }
+        else if (li == 2) { sel = R(R_W34SEL) & 15; logic = (R(R_WBGLOG) >> 4) & 3; }
+        else if (li == 3) { sel = (R(R_W34SEL) >> 4) & 15; logic = (R(R_WBGLOG) >> 6) & 3; }
+        else { sel = R(R_WOBJSEL) & 15; logic = R(R_WOBJLOG) & 3; }
+        bool inv1 = (sel & 1) != 0, en1 = (sel & 2) != 0, inv2 = (sel & 4) != 0, en2 = (sel & 8) != 0;
+        if (!en1 && !en2) continue;
+        bool masked;
+        if (en1 && !en2) masked = winTest(x, l1, r1, inv1);
+        else if (!en1 && en2) masked = winTest(x, l2, r2, inv2);
+        else masked = winLogic(logic, winTest(x, l1, r1, inv1), winTest(x, l2, r2, inv2));
+        if (masked) {
+            if ((tmw & lb) != 0) m.x |= lb;
+            if ((tsw & lb) != 0) m.y |= lb;
+        }
+    }
+    return m;
+}
+
+bool cmPrevented(int x, int scan, int prevMode) {
+    int sel = (R(R_WOBJSEL) >> 4) & 15, logic = (R(R_WOBJLOG) >> 2) & 3;
+    bool inv1 = (sel & 1) != 0, en1 = (sel & 2) != 0, inv2 = (sel & 4) != 0, en2 = (sel & 8) != 0;
+    bool valIn = prevMode == 2, valOut = prevMode == 1;
+    if (!en1 && !en2) return valOut;
+    int l1, r1, l2, r2;
+    winPos(scan, l1, r1, l2, r2);
+    bool in_;
+    if (en1 && !en2) in_ = winTest(x, l1, r1, inv1);
+    else if (!en1 && en2) in_ = winTest(x, l2, r2, inv2);
+    else in_ = winLogic(logic, winTest(x, l1, r1, inv1), winTest(x, l2, r2, inv2));
+    return in_ ? valIn : valOut;
+}
+
+// ---------------------------------------------------------------- color math
+uint blendC(uint m, uint s, bool sub, bool half_) {
+    ivec3 a = ivec3(int(m & 31u), int((m >> 6) & 31u), int((m >> 11) & 31u));
+    ivec3 b = ivec3(int(s & 31u), int((s >> 6) & 31u), int((s >> 11) & 31u));
+    ivec3 r = sub ? a - b : a + b;
+    r = clamp(r, ivec3(0), ivec3(31));
+    if (half_) r >>= 1;
+    return uint(r.x) | (uint(r.y) << 6) | (uint(r.z) << 11);
+}
+
+struct Main { uint c; int gp; int lm; };
+
+// Merge one BG layer pixel into a main-screen state (priority compare).
+void mergeMain(inout Main m, bool vis, uint col, int gp, int bit) {
+    if (vis && gp > m.gp) { m.c = col; m.gp = gp; m.lm = bit; }
+}
+
+uint shade(int x, int scan) {
+    int inidisp = R(R_INIDISP);
+    if ((inidisp & 0x80) != 0) return 0u;
+    int bright = inidisp & 15;
+    int mode = R(R_MODE);
+    int tmReg = R(R_TM), tsReg = R(R_TS);
+    int layersNeeded = tmReg | tsReg;
+
+    int baseTm = tmReg, baseTs = tsReg;
+    if (R(R_TMHDMA) != 0) {
+        int ss = scan - R(R_SPRYOFF);
+        if (ss >= 0 && ss < H) { baseTm = int(d[OFF_TMTS + ss]); baseTs = int(d[OFF_TMTS + H + ss]); }
+        else { baseTm = 0; baseTs = 0; }
+    }
+
+    int mathLayers = R(R_CGADSUB) & 0x3F;
+    bool cmActive = mathLayers != 0;
+    int prevMode = (R(R_CGWSEL) >> 4) & 3;
+    if (prevMode == 3) cmActive = false;
+    bool useSub = (R(R_CGWSEL) & 2) != 0;
+    bool subtractMode = (R(R_CGADSUB) & 0x80) != 0, halfMath = (R(R_CGADSUB) & 0x40) != 0;
+    bool needSub = cmActive && useSub;
+
+    int mosaicSize = R(R_MOSAIC) >> 4, mosaicBgs = R(R_MOSAIC) & 15;
+    int block = mosaicSize + 1;
+    int x0 = (x / block) * block;
+
+    ivec2 mk = layerMask(x, scan);
+    int effTm = baseTm & ~mk.x, effTs = baseTs & ~mk.y;
+    ivec2 mk0 = (x0 == x) ? mk : layerMask(x0, scan);
+    int effTm0 = baseTm & ~mk0.x;
+
+    Main X = Main(0u, 0, 0), L = Main(0u, 0, 0);
+    uint subC = 0u; int subGp = 0;
+
+    for (int bg = 0; bg < 4; bg++) {
+        int bit = 1 << bg;
+        if ((layersNeeded & bit) == 0) continue;
+        int bpp = R(R_BPP + bg);
+        if (bpp == 0) continue;
+        bool mos = mosaicSize > 0 && (mosaicBgs & bit) != 0;
+        int es = mos ? (scan / block) * block : scan;
+
+        uint col; int pr;
+        bool vis = bgPixel(bg, bpp, x, es, col, pr);
+        int gp0 = R(R_GP + bg * 2), gp1 = R(R_GP + bg * 2 + 1);
+        int gp = pr != 0 ? gp1 : gp0;
+
+        if ((effTm & bit) != 0) mergeMain(X, vis, col, gp, bit);
+        if (needSub && (effTs & bit) != 0 && vis && gp > subGp) { subGp = gp; subC = col; }
+
+        if (mosaicSize > 0 && mosaicBgs != 0) {
+            // Track the block leader's merged state so a mosaic layer can replicate it (CPU: the
+            // horizontal mosaic copies the leader's winning pixel over the whole block).
+            uint cL = col; int gL = gp; bool visL = vis;
+            if (x0 != x) {
+                uint colL; int prL;
+                visL = bgPixel(bg, bpp, x0, es, colL, prL);
+                cL = colL; gL = prL != 0 ? gp1 : gp0;
+            }
+            if ((effTm0 & bit) != 0) mergeMain(L, visL, cL, gL, bit);
+            if (mos && x != x0 && (L.gp == gp0 || L.gp == gp1)) { X.c = L.c; X.gp = L.gp; X.lm = bit; }
+        }
+    }
+
+    // OBJ
+    uint objC = 0u; int objP = 0;
+    bool anyObj = (layersNeeded & 16) != 0 && objPixel(x, scan, objC, objP);
+    int objPk = (anyObj && (effTm & 16) != 0) ? objP : 0;
+
+    int thresh[5] = int[5](R(R_THRESH), R(R_THRESH + 1), R(R_THRESH + 2), R(R_THRESH + 3), R(R_THRESH + 4));
+    uint backdrop = pal(0);
+    uint color; int mainLayer;
+    if (objPk > 0 && X.gp < thresh[objPk]) { color = objC; mainLayer = 16; }
+    else if (X.gp > 0) { color = X.c; mainLayer = X.lm; }
+    else { color = backdrop; mainLayer = 0x20; }
+
+    bool mathEligible = (mainLayer & mathLayers) != 0;
+    bool prevented = false;
+    if (cmActive && (prevMode == 1 || prevMode == 2)) prevented = cmPrevented(x, scan, prevMode);
+    if (cmActive && mathEligible && !prevented) {
+        uint sc;
+        if (needSub) {
+            int sPk = (anyObj && (effTs & 16) != 0) ? objP : 0;
+            if (sPk > 0 && subGp < thresh[sPk]) sc = objC;
+            else if (subGp > 0) sc = subC;
+            else sc = 0u;
+        } else sc = uint(R(R_FIXED));
+        color = blendC(color, sc, subtractMode, halfMath);
+    }
+
+    if (bright < 15) {
+        uint bm = uint(bright * 17);
+        uint r = ((color & 31u) * bm) >> 8;
+        uint g = (((color >> 6) & 31u) * bm) >> 8;
+        uint b = (((color >> 11) & 31u) * bm) >> 8;
+        color = r | (g << 6) | (b << 11);
+    }
+    return color;
+}
+
+void main() {
+    int px = int(gl_GlobalInvocationID.x) * 2, y = int(gl_GlobalInvocationID.y);
+    if (px >= 256 || y >= H) return;
+    uint a = shade(px, y), b = shade(px + 1, y);
+    o[y * 128 + int(gl_GlobalInvocationID.x)] = (a & 0xFFFFu) | (b << 16);
+}

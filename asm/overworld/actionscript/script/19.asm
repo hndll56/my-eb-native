@@ -1,0 +1,5 @@
+
+MOVEMENT_CODE_19:
+	LDA [$80],Y
+	TAY
+	RTS

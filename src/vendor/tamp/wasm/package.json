@@ -1,0 +1,83 @@
+{
+  "name": "@brianpugh/tamp",
+  "version": "0.0.0",
+  "description": "Tamp compression library for JavaScript/TypeScript using WebAssembly",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./streams": {
+      "types": "./dist/streams.d.ts",
+      "import": "./dist/streams.mjs",
+      "require": "./dist/streams.cjs"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "make all && npm run build:js",
+    "build:js": "tsup",
+    "build:minified": "make all && tsup --minify",
+    "build:debug": "make debug && npm run build:js",
+    "clean": "make clean && rm -rf dist",
+    "test": "node --test test/*.js",
+    "test:integration": "node --test test/integration-test.js",
+    "test:basic": "node --test test/basic-test.js",
+    "benchmark": "node benchmark.js",
+    "benchmark:verify": "node benchmark.js --verify --iterations 1",
+    "test:enwik8": "node benchmark.js --output ../build/enwik8-js.tamp --verify --iterations 1",
+    "format": "prettier --write src/ test/ *.md *.json *.config.js",
+    "lint": "eslint src/ test/ --fix",
+    "format-and-lint": "npm run format && npm run lint",
+    "type-check": "tsc --noEmit --skipLibCheck src/*.d.ts",
+    "prepublishOnly": "npm run build:minified"
+  },
+  "keywords": [
+    "compression",
+    "deflate",
+    "lossless",
+    "embedded",
+    "webassembly",
+    "wasm",
+    "tamp",
+    "javascript",
+    "typescript"
+  ],
+  "author": "Brian Pugh",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BrianPugh/tamp.git",
+    "directory": "wasm"
+  },
+  "bugs": {
+    "url": "https://github.com/BrianPugh/tamp/issues"
+  },
+  "homepage": "https://tamp.readthedocs.io/",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.28.0",
+    "html-minifier-terser": "^7.2.0",
+    "prettier": "^3.8.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  }
+}

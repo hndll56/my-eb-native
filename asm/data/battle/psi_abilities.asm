@@ -1,0 +1,649 @@
+
+PSI_ABILITY_TABLE:
+	.BYTE $00 ;Name
+	.BYTE $00 ;Level
+	.BYTE $00 ;Type
+	.BYTE $00 ;Target
+	.WORD BATTLE_ACTIONS::NO_EFFECT
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $00 ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD NULL
+
+	.BYTE PSI_ID::ROCKIN ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_ROCKIN_ALPHA
+	.BYTE $08 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_HISSATSU_ALFA
+
+	.BYTE PSI_ID::ROCKIN ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_ROCKIN_BETA
+	.BYTE $16 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_HISSATSU_BETA
+
+	.BYTE PSI_ID::ROCKIN ;Name
+	.BYTE PSI_LEVEL::GAMMA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_ROCKIN_GAMMA
+	.BYTE $31 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_HISSATSU_GAMMA
+
+	.BYTE PSI_ID::ROCKIN ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_ROCKIN_OMEGA
+	.BYTE $4B ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_HISSATSU_OMEGA
+
+	.BYTE PSI_ID::FIRE ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FIRE_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $03 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FIRE_ALFA
+
+	.BYTE PSI_ID::FIRE ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FIRE_BETA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $13 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FIRE_BETA
+
+	.BYTE PSI_ID::FIRE ;Name
+	.BYTE PSI_LEVEL::GAMMA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FIRE_GAMMA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $25 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FIRE_GAMMA
+
+	.BYTE PSI_ID::FIRE ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FIRE_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $40 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FIRE_OMEGA
+
+	.BYTE PSI_ID::FREEZE ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FREEZE_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $01 ;Level (Paula)
+	.BYTE $01 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FREEZ_ALFA
+
+	.BYTE PSI_ID::FREEZE ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FREEZE_BETA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $0B ;Level (Paula)
+	.BYTE $01 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FREEZ_BETA
+
+	.BYTE PSI_ID::FREEZE ;Name
+	.BYTE PSI_LEVEL::GAMMA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FREEZE_GAMMA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $1F ;Level (Paula)
+	.BYTE $21 ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FREEZ_GAMMA
+
+	.BYTE PSI_ID::FREEZE ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FREEZE_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $2E ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FREEZ_OMEGA
+
+	.BYTE PSI_ID::THUNDER ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_THUNDER_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $08 ;Level (Paula)
+	.BYTE $01 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_THUNDER_ALFA
+
+	.BYTE PSI_ID::THUNDER ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_THUNDER_BETA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $19 ;Level (Paula)
+	.BYTE $01 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_THUNDER_BETA
+
+	.BYTE PSI_ID::THUNDER ;Name
+	.BYTE PSI_LEVEL::GAMMA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_THUNDER_GAMMA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $39 ;Level (Paula)
+	.BYTE $29 ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_THUNDER_GAMMA
+
+	.BYTE PSI_ID::THUNDER ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_THUNDER_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $37 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_THUNDER_OMEGA
+
+	.BYTE PSI_ID::FLASH ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FLASH_ALPHA
+	.BYTE $12 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FLASH_ALFA
+
+	.BYTE PSI_ID::FLASH ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FLASH_BETA
+	.BYTE $26 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FLASH_BETA
+
+	.BYTE PSI_ID::FLASH ;Name
+	.BYTE PSI_LEVEL::GAMMA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FLASH_GAMMA
+	.BYTE $3D ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FLASH_GAMMA
+
+	.BYTE PSI_ID::FLASH ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_FLASH_OMEGA
+	.BYTE $43 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_FLASH_OMEGA
+
+	.BYTE PSI_ID::STARSTORM ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_STARSTORM_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_STARSTOM_ALFA
+
+	.BYTE PSI_ID::STARSTORM ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::OFFENSE ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_STARSTORM_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_STARSTORM_OMEGA
+
+	.BYTE PSI_ID::LIFEUP ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ALLIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_LIFEUP_ALPHA
+	.BYTE $02 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $01 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_LIFEUP_ALFA
+
+	.BYTE PSI_ID::LIFEUP ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ALLIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_LIFEUP_BETA
+	.BYTE $14 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $01 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_LIFEUP_BETA
+
+	.BYTE PSI_ID::LIFEUP ;Name
+	.BYTE PSI_LEVEL::GAMMA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ALLIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_LIFEUP_GAMMA
+	.BYTE $27 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $2E ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_LIFEUP_GAMMA
+
+	.BYTE PSI_ID::LIFEUP ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ALLIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_LIFEUP_OMEGA
+	.BYTE $46 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_LIFEUP_OMEGA
+
+	.BYTE PSI_ID::HEALING ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ALLIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_HEALING_ALPHA
+	.BYTE $0A ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $01 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_HEALING_ALFA
+
+	.BYTE PSI_ID::HEALING ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ALLIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_HEALING_BETA
+	.BYTE $18 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $01 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_HEALING_BETA
+
+	.BYTE PSI_ID::HEALING ;Name
+	.BYTE PSI_LEVEL::GAMMA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ALLIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_HEALING_GAMMA
+	.BYTE $35 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $24 ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_HEALING_GAMMA
+
+	.BYTE PSI_ID::HEALING ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ALLIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_HEALING_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $34 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_HEALING_OMEGA
+
+	.BYTE PSI_ID::SHIELD ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_SHIELD_ALPHA
+	.BYTE $0C ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $0E ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_SHIELD_ALFA
+
+	.BYTE PSI_ID::SHIELD ;Name
+	.BYTE PSI_LEVEL::SIGMA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_SHIELD_SIGMA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $0F ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_SHIELD_SIGMA
+
+	.BYTE PSI_ID::SHIELD ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_SHIELD_BETA
+	.BYTE $22 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $10 ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_SHIELD_BETA
+
+	.BYTE PSI_ID::SHIELD ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_SHIELD_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $33 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_SHIELD_OMEGA
+
+	.BYTE PSI_ID::PSI_SHIELD ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_PSI_SHIELD_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $06 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_P_SHIELD_ALFA
+
+	.BYTE PSI_ID::PSI_SHIELD ;Name
+	.BYTE PSI_LEVEL::SIGMA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_PSI_SHIELD_SIGMA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $1B ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_P_SHIELD_SIGMA
+
+	.BYTE PSI_ID::PSI_SHIELD ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_PSI_SHIELD_BETA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $33 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0D ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_P_SHIELD_BETA
+
+	.BYTE PSI_ID::PSI_SHIELD ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_PSI_SHIELD_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $3C ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0F ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_P_SHIELD_OMEGA
+
+	.BYTE PSI_ID::OFFENSE_UP ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_OFFENSE_UP_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $15 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_OFFENSE_UP_ALFA
+
+	.BYTE PSI_ID::OFFENSE_UP ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_OFFENSE_UP_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $28 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_OFFENSE_UP_OMEGA
+
+	.BYTE PSI_ID::DEFENSE_DOWN ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_DEFENSE_DOWN_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $1D ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_DEFENSE_DOWN_ALFA
+
+	.BYTE PSI_ID::DEFENSE_DOWN ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_DEFENSE_DOWN_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $36 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_DEFENSE_DOWN_OMEGA
+
+	.BYTE PSI_ID::HYPNOSIS ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_HYPNOSIS_ALPHA
+	.BYTE $04 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_SAIMIN_ALFA
+
+	.BYTE PSI_ID::HYPNOSIS ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_HYPNOSIS_OMEGA
+	.BYTE $1B ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_SAIMIN_OMEGA
+
+	.BYTE PSI_ID::MAGNET ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_MAGNET_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $0F ;Level (Paula)
+	.BYTE $15 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_P_MAGNET_ALFA
+
+	.BYTE PSI_ID::MAGNET ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::RECOVER ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_MAGNET_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $18 ;Level (Paula)
+	.BYTE $1B ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_P_MAGNET_OMEGA
+
+	.BYTE PSI_ID::PARALYSIS ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_PARALYSIS_ALPHA
+	.BYTE $0E ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_PARALYSIS_ALFA
+
+	.BYTE PSI_ID::PARALYSIS ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_PARALYSIS_OMEGA
+	.BYTE $1D ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_PARALYSIS_OMEGA
+
+	.BYTE PSI_ID::BRAINSHOCK ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_BRAINSHOCK_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $18 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_BRAIN_SHOCK_ALFA
+
+	.BYTE PSI_ID::BRAINSHOCK ;Name
+	.BYTE PSI_LEVEL::OMEGA ;Level
+	.BYTE PSI_CATEGORY::ASSIST ;Type
+	.BYTE PSI_TARGET::ENEMIES ;Target
+	.WORD BATTLE_ACTIONS::PSI_BRAINSHOCK_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $2C ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $01 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_BRAIN_SHOCK_OMEGA
+
+	.BYTE PSI_ID::TELEPORT ;Name
+	.BYTE PSI_LEVEL::ALPHA ;Level
+	.BYTE PSI_CATEGORY::OTHER ;Type
+	.BYTE PSI_TARGET::NOBODY ;Target
+	.WORD BATTLE_ACTIONS::PSI_TELEPORT_ALPHA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $11 ;Level (Poo)
+	.BYTE $09 ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_TELEPORT_ALFA
+
+	.BYTE PSI_ID::TELEPORT ;Name
+	.BYTE PSI_LEVEL::BETA ;Level
+	.BYTE PSI_CATEGORY::OTHER ;Type
+	.BYTE PSI_TARGET::NOBODY ;Target
+	.WORD BATTLE_ACTIONS::PSI_TELEPORT_OMEGA
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $12 ;Level (Poo)
+	.BYTE $0B ;Position in PSI menu (X)
+	.BYTE $02 ;Position in PSI menu (Y)
+	.DWORD MSG_EXPL_PSI_TELEPORT_BETA
+
+	.BYTE $00 ;Name
+	.BYTE $00 ;Level
+	.BYTE $00 ;Type
+	.BYTE $00 ;Target
+	.WORD BATTLE_ACTIONS::NO_EFFECT
+	.BYTE $00 ;Level (Ness)
+	.BYTE $00 ;Level (Paula)
+	.BYTE $00 ;Level (Poo)
+	.BYTE $00 ;Position in PSI menu (X)
+	.BYTE $00 ;Position in PSI menu (Y)
+	.DWORD NULL

@@ -1,0 +1,3 @@
+
+NMI_VECTOR:
+	JMP f:NMI

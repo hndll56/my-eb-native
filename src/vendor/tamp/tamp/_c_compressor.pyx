@@ -1,0 +1,215 @@
+cimport ctamp
+from libcpp cimport bool
+from cpython.exc cimport PyErr_CheckSignals
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
+from libc.stddef cimport size_t
+from io import BytesIO
+from ._c_common cimport CHUNK_SIZE
+from ._c_common import ERROR_LOOKUP
+
+from typing import Union
+
+cdef class Compressor:
+    cdef ctamp.TampCompressor* _c_compressor
+    cdef bytearray _window_buffer
+    cdef unsigned char *_window_buffer_ptr
+    cdef void *_match_index
+    cdef object f
+    cdef bint _close_f_on_close
+    cdef bint _dictionary_reset
+
+    def __cinit__(self):
+        self._c_compressor = <ctamp.TampCompressor*>PyMem_Malloc(sizeof(ctamp.TampCompressor))
+        if self._c_compressor is NULL:
+            raise MemoryError
+
+    def __dealloc__(self):
+        PyMem_Free(self._match_index)
+        PyMem_Free(self._c_compressor)
+
+    cdef int _attach_match_index(self) except -1:
+        if self._match_index is not NULL:
+            ctamp.tamp_py_set_match_index(self._c_compressor, self._match_index)
+        return 0
+
+    def __init__(
+        self,
+        f,
+        *,
+        int window=10,
+        int literal=8,
+        dictionary=None,
+        bool lazy_matching=False,
+        bool extended=True,
+        bool dictionary_reset=False,
+        bool append=False,
+    ):
+        cdef ctamp.TampConf conf
+
+        if dictionary is not None and len(dictionary) != (1 << window):
+            # The exact size is required: a too-small buffer used as the window
+            # would let the C compressor write out of bounds.
+            raise ValueError("Dictionary-window size mismatch.")
+
+        if not hasattr(f, "write"):  # It's probably a path-like object.
+            f = open(str(f), "wb")
+            self._close_f_on_close = True
+        else:
+            self._close_f_on_close = False
+
+        self.f = f
+
+        conf.window = window
+        conf.literal = literal
+        conf.use_custom_dictionary = dictionary is not None
+        # Set lazy_matching - this field is conditionally compiled based on TAMP_LAZY_MATCHING
+        # The build system defines this macro, so the field should be available
+        conf.lazy_matching = lazy_matching
+        conf.extended = extended
+        conf.dictionary_reset = dictionary_reset
+        conf.append = append
+
+        self._window_buffer = dictionary if dictionary is not None else bytearray(1 << window)
+        self._window_buffer_ptr = <unsigned char *>self._window_buffer
+
+        self._dictionary_reset = dictionary_reset
+        res = ctamp.tamp_compressor_init(self._c_compressor, &conf, self._window_buffer_ptr)
+        if res < 0:
+            raise ERROR_LOOKUP.get(res, NotImplementedError)
+
+        PyMem_Free(self._match_index)
+        self._match_index = NULL
+        cdef size_t match_index_size = ctamp.tamp_py_match_index_size(window)
+        if match_index_size:
+            self._match_index = PyMem_Malloc(match_index_size)
+            if self._match_index is NULL:
+                raise MemoryError
+            self._attach_match_index()
+
+    def write(self, const unsigned char[::1] data not None) -> int:
+        cdef:
+            ctamp.tamp_res res
+
+            bytearray output_buffer
+            unsigned char *output_buffer_ptr
+            const unsigned char* data_ptr
+
+            size_t input_consumed_size = 0
+            size_t input_remaining_size = data.shape[0]
+            size_t output_buffer_written_size
+            int written_to_disk_size = 0
+
+        if input_remaining_size == 0:
+            # &data[0] on an empty buffer raises IndexError.
+            return 0
+
+        output_buffer = bytearray(CHUNK_SIZE)
+        output_buffer_ptr = output_buffer
+        data_ptr = &data[0]
+
+        output_buffer_mv = memoryview(output_buffer)
+
+        while input_remaining_size:
+            with nogil:
+                res = ctamp.tamp_compressor_compress(
+                    self._c_compressor,
+                    output_buffer_ptr,
+                    CHUNK_SIZE,
+                    &output_buffer_written_size,
+                    data_ptr,
+                    input_remaining_size,
+                    &input_consumed_size
+                )
+            if res < 0:
+                raise ERROR_LOOKUP.get(res, NotImplementedError)
+            self.f.write(output_buffer_mv[:output_buffer_written_size])
+            written_to_disk_size += output_buffer_written_size
+            data_ptr += input_consumed_size
+            input_remaining_size -= input_consumed_size
+
+            # Check signals for things like KeyboardInterrupt
+            PyErr_CheckSignals()
+
+        return written_to_disk_size
+
+    cpdef int flush(self, bool write_token = True) except -1:
+        cdef ctamp.tamp_res res
+        cdef bytearray buffer = bytearray(32)
+        cdef size_t output_written_size = 0
+
+        cdef unsigned char *buffer_ptr = <unsigned char *> buffer
+        cdef size_t buffer_len = len(buffer)
+        with nogil:
+            res = ctamp.tamp_compressor_flush(
+                self._c_compressor,
+                buffer_ptr,
+                buffer_len,
+                &output_written_size,
+                write_token,
+            )
+
+        if res < 0:
+            raise ERROR_LOOKUP.get(res, NotImplementedError)
+
+        if output_written_size:
+            self.f.write(buffer[:output_written_size])
+
+        self.f.flush()
+
+        return output_written_size
+
+    cpdef int reset_dictionary(self) except -1:
+        cdef ctamp.tamp_res res
+        cdef bytearray buffer = bytearray(32)  # Worst case: 23 (flush) + 4 (2x FLUSH) = 27 bytes
+        cdef size_t output_written_size = 0
+
+        res = ctamp.tamp_compressor_reset_dictionary(
+            self._c_compressor,
+            <unsigned char *> buffer,
+            len(buffer),
+            &output_written_size,
+        )
+
+        if res < 0:
+            raise ERROR_LOOKUP.get(res, NotImplementedError)
+        self._attach_match_index()
+
+        if output_written_size:
+            self.f.write(buffer[:output_written_size])
+
+        self.f.flush()
+
+        return output_written_size
+
+    def close(self) -> int:
+        # When dictionary_reset is enabled, always end with a FLUSH token
+        # so that a future append-mode compressor can form a double-FLUSH.
+        bytes_written = self.flush(write_token=self._dictionary_reset)
+        if self._close_f_on_close:
+            self.f.close()
+        return bytes_written
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+
+class TextCompressor(Compressor):
+
+    def write(self, data: str) -> int:
+        return super().write(data.encode())
+
+
+def compress(data: Union[bytes, str], *args, **kwargs) -> bytes:
+    with BytesIO() as f:
+        if isinstance(data, str):
+            c = TextCompressor(f, *args, **kwargs)
+            c.write(data)
+        else:
+            c = Compressor(f, *args, **kwargs)
+            c.write(data)
+        c.flush(write_token=False)
+        f.seek(0)
+        return f.read()

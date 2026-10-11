@@ -1,0 +1,3 @@
+
+IRQ_VECTOR:
+	JMP f:IRQ

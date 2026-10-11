@@ -1,0 +1,187 @@
+cimport ctamp
+from cpython.exc cimport PyErr_CheckSignals
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
+from libc.stddef cimport size_t
+from io import BytesIO
+from ._c_common cimport CHUNK_SIZE
+from ._c_common import ERROR_LOOKUP
+
+from typing import Union
+
+
+cdef class Decompressor:
+    cdef:
+        ctamp.TampDecompressor* _c_decompressor
+        bytearray _window_buffer
+        unsigned char *_window_buffer_ptr
+        object input_buffer
+        unsigned char *input_buffer_ptr
+        size_t input_size
+        size_t input_consumed
+        object f
+        bint _close_f_on_close
+
+    def __cinit__(self):
+        self._c_decompressor = <ctamp.TampDecompressor*>PyMem_Malloc(sizeof(ctamp.TampDecompressor))
+        if self._c_decompressor is NULL:
+            raise MemoryError
+
+    def __dealloc__(self):
+        PyMem_Free(self._c_decompressor)
+
+    def __init__(self, f, *, dictionary=None):
+        cdef:
+            ctamp.TampConf conf
+            size_t input_consumed_size;
+
+        if not hasattr(f, "read"):  # It's probably a path-like object.
+            f = open(str(f), "rb")
+            self._close_f_on_close = True
+        else:
+            self._close_f_on_close = False
+
+        self.f = f
+
+        self.input_buffer = bytearray(CHUNK_SIZE)
+        self.input_buffer_ptr = self.input_buffer
+        self.input_size = 0
+        self.input_consumed = 0
+
+        # Read header incrementally (1 byte at a time) so we don't require seek support.
+        cdef bytearray header_buf = bytearray()
+        while True:
+            b = f.read(1)
+            if not b:
+                raise ERROR_LOOKUP.get(ctamp.TAMP_INPUT_EXHAUSTED, NotImplementedError)
+            header_buf += b
+            res = ctamp.tamp_decompressor_read_header(&conf, header_buf, len(header_buf), &input_consumed_size)
+            if res == ctamp.TAMP_OK:
+                break
+            if res != ctamp.TAMP_INPUT_EXHAUSTED:
+                raise ERROR_LOOKUP.get(res, NotImplementedError)
+
+        if conf.use_custom_dictionary and dictionary is None:
+            raise ValueError
+
+        if dictionary is not None and len(dictionary) < (1 << conf.window):
+            # A too-small buffer used as the window would let the C
+            # decompressor write out of bounds. An oversized buffer is fine:
+            # C uses only the first 2**window bytes, in place.
+            raise ValueError("Dictionary-window size mismatch.")
+
+        self._window_buffer = dictionary if dictionary is not None else bytearray(1 << conf.window)
+        self._window_buffer_ptr = <unsigned char *>self._window_buffer
+
+        res = ctamp.tamp_decompressor_init(self._c_decompressor, &conf, self._window_buffer_ptr, conf.window)
+        if res < 0:
+            raise ERROR_LOOKUP.get(res, NotImplementedError)
+
+    def readinto(self, bytearray buf) -> int:
+        cdef:
+            unsigned char *output_buffer_ptr = buf
+            size_t output_written_size, input_chunk_consumed
+            unsigned char *input_ptr
+            size_t input_avail
+            size_t output_size
+            size_t size
+            ctamp.tamp_res res
+
+        size = len(buf)
+        while size:
+            # decompress in chunks so we can still check PyErr_CheckSignals
+            output_size = min(<size_t>CHUNK_SIZE, size)
+
+            input_ptr = self.input_buffer_ptr + self.input_consumed
+            input_avail = self.input_size
+            with nogil:
+                res = ctamp.tamp_decompressor_decompress(
+                    self._c_decompressor,
+                    output_buffer_ptr,
+                    output_size,
+                    &output_written_size,
+                    input_ptr,
+                    input_avail,
+                    &input_chunk_consumed
+                )
+            self.input_size -= input_chunk_consumed
+            self.input_consumed += input_chunk_consumed
+            output_buffer_ptr += output_written_size
+            size -= output_written_size
+
+            if res == ctamp.TAMP_INPUT_EXHAUSTED:
+                # Read in more data
+                if hasattr(self.f, "readinto"):
+                    self.input_size = self.f.readinto(self.input_buffer)
+                else:
+                    # Fall back for file-like objects that only implement read().
+                    chunk = self.f.read(CHUNK_SIZE)
+                    self.input_size = len(chunk)
+                    if self.input_size > <size_t>CHUNK_SIZE:
+                        # A larger chunk would resize (reallocate) input_buffer,
+                        # leaving input_buffer_ptr dangling.
+                        raise ValueError("read() returned more bytes than requested.")
+                    self.input_buffer[:self.input_size] = chunk
+                self.input_consumed = 0
+                if self.input_size == 0:
+                    break;
+            elif res < 0:
+                raise ERROR_LOOKUP.get(res, NotImplementedError)
+
+            # Check signals for things like KeyboardInterrupt
+            PyErr_CheckSignals()
+
+        return len(buf) - size
+
+    def read(self, int size = -1) -> bytearray:
+        """
+        Parameters
+        ----------
+        size: int
+            Number of bytes to attempt to read in.
+            If negative 1, read until end of stream.
+        """
+        if size == 0:
+            return bytearray()
+
+        chunk_size = CHUNK_SIZE
+        out = []
+        while True:
+            # buf holds decompressed data.
+            buf = bytearray(chunk_size if size < 0 else size)
+            chunk_size <<= 1  # Keep allocating larger chunks as we go on.
+            # decompression happens inside of readinto
+            read_size = self.readinto(buf)
+            if size > 0:
+                # We one-shot the decompression.
+                # Trim unwritten zero-padding when the stream ended early.
+                del buf[read_size:]
+                out.append(buf)
+                break
+            # We are decompressing in chunks
+            if read_size < len(buf):
+                if read_size:
+                    out.append(buf[:read_size])
+                break
+            else:
+                out.append(buf)
+        return out[0] if len(out) == 1 else bytearray(b"".join(out))
+
+    def close(self):
+        if self._close_f_on_close:
+            self.f.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+class TextDecompressor(Decompressor):
+    def read(self, *args, **kwargs) -> str:
+        return super().read(*args, **kwargs).decode()
+
+
+def decompress(data: bytes, *args, **kwargs) -> bytearray:
+    with BytesIO(data) as f:
+        d = Decompressor(f, *args, **kwargs)
+        return d.read()

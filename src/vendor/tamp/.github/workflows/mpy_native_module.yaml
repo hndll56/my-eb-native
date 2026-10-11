@@ -1,0 +1,173 @@
+name: Build MicroPython Native Module
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+    branches:
+      - main
+    paths:
+      - 'mpy_bindings/**'
+      - 'tamp/_c_src/**'
+      - 'Makefile'
+      - '.github/workflows/mpy_native_module.yaml'
+  pull_request:
+    paths:
+      - 'mpy_bindings/**'
+      - 'tamp/_c_src/**'
+      - 'Makefile'
+      - '.github/workflows/mpy_native_module.yaml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 'Build all architectures and mpy versions'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Get Tag or Commit Hash
+        run: |
+          # setuptools-scm derives the version from git tags; bake it into the
+          # native module source so it's compiled into the .mpy.
+          VERSION=$(uvx --from setuptools-scm python -m setuptools_scm)
+          echo "Detected version is: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" mpy_bindings/bindings_common.py
+
+      - name: Build tamp (compressor + decompressor)
+        uses: BrianPugh/build-mpy-native-module@v1
+        with:
+          mpy-version: 6.1, 6.2, 6.3
+          architecture: all
+          make-target: mpy
+          output-name: tamp-${{ env.VERSION }}
+          static-const-workaround: true
+
+      - name: Build tamp[compressor]
+        uses: BrianPugh/build-mpy-native-module@v1
+        with:
+          mpy-version: 6.1, 6.2, 6.3
+          architecture: all
+          make-target: mpy
+          make-args: TAMP_DECOMPRESSOR=0
+          output-name: tamp[compressor]-${{ env.VERSION }}
+          static-const-workaround: true
+
+      - name: Build tamp[decompressor]
+        uses: BrianPugh/build-mpy-native-module@v1
+        with:
+          mpy-version: 6.1, 6.2, 6.3
+          architecture: all
+          make-target: mpy
+          make-args: TAMP_COMPRESSOR=0
+          output-name: tamp[decompressor]-${{ env.VERSION }}
+          static-const-workaround: true
+
+      - name: Display built artifacts
+        run: ls -alh dist/*.mpy
+
+      - name: Upload Native Module MPY Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpy-native-module-all
+          path: 'dist/*.mpy'
+
+  test:
+    name: 'Test x64 mpy ${{ matrix.mpy_version }}'
+    runs-on: ubuntu-24.04
+    needs:
+      - build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Runtime must match the mpy subversion to load native modules
+          - mpy_version: '6.1'
+            micropython_version: 'v1.21.0'
+          - mpy_version: '6.2'
+            micropython_version: 'v1.22.2'
+          - mpy_version: '6.3'
+            micropython_version: 'v1.27.0'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Native Module Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mpy-native-module-all
+          path: dist
+
+      - name: Install MicroPython
+        uses: BrianPugh/install-micropython@v2
+        with:
+          reference: ${{ matrix.micropython_version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Get Tag or Commit Hash
+        run: |
+          VERSION=$(uvx --from setuptools-scm python -m setuptools_scm)
+          echo "Detected version is: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Install library
+        run: uv sync --locked
+
+      - name: Test full module
+        run: |
+          cp "dist/tamp-${VERSION}-mpy${{ matrix.mpy_version }}-x64.mpy" tamp_native.mpy
+          uv run belay run micropython -X heapsize=200M -m unittest $(find tests -name "test_*.py" ! -name "test_cli.py" ! -name "test_dataset_regression.py" ! -name "test_build_dictionary.py")
+          rm tamp_native.mpy
+
+      - name: Test compressor-only module
+        run: |
+          cp "dist/tamp[compressor]-${VERSION}-mpy${{ matrix.mpy_version }}-x64.mpy" tamp_native.mpy
+          uv run belay run micropython -X heapsize=200M -m unittest tests/test_compressor.py
+          rm tamp_native.mpy
+
+      - name: Test decompressor-only module
+        run: |
+          cp "dist/tamp[decompressor]-${VERSION}-mpy${{ matrix.mpy_version }}-x64.mpy" tamp_native.mpy
+          uv run belay run micropython -X heapsize=200M -m unittest tests/test_decompressor.py
+          rm tamp_native.mpy
+
+  release_upload:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - test
+    steps:
+      - name: Download All Native Module Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mpy-native-module-all
+          path: mpy-native-modules
+
+      - name: Display All Native Module Artifacts
+        run: ls -alh mpy-native-modules
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            mpy-native-modules/*

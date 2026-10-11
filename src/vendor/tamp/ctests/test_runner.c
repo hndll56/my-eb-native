@@ -1,0 +1,75 @@
+#include "unity.h"
+
+// Unity requires these functions
+void setUp(void) { /* This is run before EACH test */
+}
+
+void tearDown(void) { /* This is run after EACH test */
+}
+
+// Include test files directly
+#include "test_compressor.c"
+#include "test_decompressor.c"
+#include "test_stream.c"
+#include "test_stream_filesystems.c"
+
+int main(void) {
+    UNITY_BEGIN();
+
+    // Decompressor tests
+    RUN_TEST(test_decompressor_byte_by_byte);
+    RUN_TEST(test_decompressor_malicious_oob);
+    RUN_TEST(test_decompress_cb_callback_receives_input_consumed);
+
+    // Compressor tests
+    RUN_TEST(test_compressor_init);
+    RUN_TEST(test_compressor_simple);
+    RUN_TEST(test_compressor_extended_simple);
+    RUN_TEST(test_compressor_extended_rle_roundtrip);
+    RUN_TEST(test_compressor_extended_match_roundtrip);
+    RUN_TEST(test_compressor_extended_rle_transition_roundtrip);
+    RUN_TEST(test_compressor_extended_window8_roundtrip);
+    RUN_TEST(test_compressor_extended_window9_roundtrip);
+#if TAMP_LAZY_MATCHING
+    RUN_TEST(test_compressor_extended_lazy_roundtrip);
+    RUN_TEST(test_compressor_extended_lazy_rle_fuzz);
+#endif
+    RUN_TEST(test_compressor_extended_rle_lone_byte_sink_poll);
+    RUN_TEST(test_compress_cb_callback_receives_input_consumed);
+    RUN_TEST(test_compress_cb_callback_abort);
+    RUN_TEST(test_reset_dictionary_roundtrip);
+    RUN_TEST(test_reset_dictionary_requires_conf_flag);
+    RUN_TEST(test_reset_dictionary_small_output_buffer);
+    RUN_TEST(test_double_flush_does_not_reset);
+
+    // find_best_match edge cases (exact-bitstream pinned)
+    RUN_TEST(test_find_best_match_window_edge);
+    RUN_TEST(test_find_best_match_alignment_phases);
+    RUN_TEST(test_find_best_match_swar_byte_patterns);
+    RUN_TEST(test_find_best_match_max_pattern_early_exit);
+
+    // Decompressor extended tests
+    RUN_TEST(test_decompressor_extended_rle);
+    RUN_TEST(test_decompressor_extended_match);
+
+    // Stream tests
+    RUN_TEST(test_decompress_stream_simple);
+    RUN_TEST(test_stream_roundtrip);
+    RUN_TEST(test_stream_extended_roundtrip);
+    RUN_TEST(test_stream_extended_rle_roundtrip);
+    RUN_TEST(test_compress_stream_callback_receives_input_consumed);
+    RUN_TEST(test_decompress_stream_callback_receives_input_consumed);
+
+    // Built-in I/O handler tests
+    RUN_TEST(test_stdio_handlers_roundtrip);
+
+    // Filesystem handler tests
+#ifdef TEST_LITTLEFS
+    RUN_TEST(test_littlefs_roundtrip);
+#endif
+#ifdef TEST_FATFS
+    RUN_TEST(test_fatfs_roundtrip);
+#endif
+
+    return UNITY_END();
+}

@@ -1,0 +1,328 @@
+Specification
+=============
+Tamp uses a single-pass DEFLATE-like algorithm that is optimized for a fast,
+simple implementation in micropython.
+Trade-offs were made between code-complexity, speed, memory-usage, and compression-ratio.
+This document describes the compression algorithm, design choices, and the data format.
+Tamp outputs a continuous bit stream, where the most-significant-bit (MSb) comes first.
+
+Stream Header
+~~~~~~~~~~~~~
+Tamp has a single header byte described in the following table.
+The locations are zero index from the beginning of the stream.
+The bit-location 0 is equivalent to typical MSb position 7 of the first byte.
+
++---------+-------------------+---------------------------------------------------------------------+
+| Bits    | Name              | Description                                                         |
++=========+===================+=====================================================================+
+| [7,6,5] | window            | Number of bits, minus 8, used to represent the size                 |
+|         |                   | of the shifting window.                                             |
+|         |                   | e.g. A 12-bit window is encoded as the number 4, ``0b100``.         |
+|         |                   | This means the smallest window is 256 bytes, and largest is 32768.  |
++---------+-------------------+---------------------------------------------------------------------+
+| [4,3]   | literal_size      | Number of bits, minus 5, in a literal.                              |
+|         |                   | For example, ``0b11`` represents a standard 8 bit (1 byte) literal. |
++---------+-------------------+---------------------------------------------------------------------+
+| [2]     | custom_dictionary | A custom dictionary initialization method was used                  |
+|         |                   | and must be provided at decompression.                              |
++---------+-------------------+---------------------------------------------------------------------+
+| [1]     | extended          | Enables extended format features (RLE, extended match encoding).    |
+|         |                   | Generally improves compression, introduced in tamp v2.0.0.          |
++---------+-------------------+---------------------------------------------------------------------+
+| [0]     | more_header       | Next byte is header byte 2 (see `Header Byte 2`_). Implies          |
+|         |                   | ``dictionary_reset``: stream may contain double-FLUSH resets.       |
+|         |                   | Old decompressors reject the stream at the header.                  |
++---------+-------------------+---------------------------------------------------------------------+
+
+.. _header-byte-2:
+
+Header Byte 2
+~~~~~~~~~~~~~
+Present only when ``more_header`` (bit 0 of byte 1) is set.
+All 8 bits are reserved for future use and must be ``0``.
+Decompressors must reject non-zero values with ``TAMP_INVALID_CONF``.
+
+Stream Encoding/Decoding
+~~~~~~~~~~~~~~~~~~~~~~~~
+After the header bytes is the data stream. The datastream is written in bits, so all data is packed
+tightly with no padding.
+At a high level, Tamp applies LZSS compression, followed by a fixed, pre-defined Huffman coding
+for representing the match length.
+
+LZSS
+^^^^
+Tamp uses a *slightly* modified LZSS compression algorithm.
+Modifications are made to make the implementation simpler/faster.
+
+1. Initialize a ring_buffer of size ``1 << window`` defined in the header. See
+   _`Dictionary Initialization` for initialization details.
+
+2. Starting at the beginning of the plaintext, find the longest match
+   existing in the dictionary. If no pattern (<2 character match) is found, output a literal.
+   If a pattern is detected
+
+   a. literal: ``0b1 | literal``. The first bit (``1``) represents that the following bits
+      represent a literal. The ``literal`` is ``literal_size`` bits long.
+
+   b. token: ``0b0 | length-huffman-code | offset``. The first bit (``0``) represents that
+      the following bits represent a token. The length of the pattern match is encoded via
+      a pre-defined static _`Huffman code`. Finally, the ``offset`` is ``window`` bits long,
+      and points at the offset from the beginning of the dictionary buffer to the pattern.
+      The shortest pattern-length is either going to be 2 or 3 bytes, depending on ``window``
+      and ``literal`` parameters. The shortest pattern-length encoding must be shorter than
+      an equivalent stream of literals. In the basic (non-extended) format, the longest
+      pattern-length is the minimum pattern-length plus 13. When the ``extended`` flag
+      is set, longer matches are possible via extended match encoding.
+
+Classically, the ``offset`` is from the current position in the buffer. Doing so results
+in the ``offset`` distribution slightly favoring smaller numbers. Intuitively, it makes
+sense that patterns are more likely to occur closer to the current text. A proposed idea
+was to include the ``offset`` most-significant bit with the length-huffman-code.
+Unfortuneately, the probability distribution wasn't biased enough to increase compression.
+For this reason, we just encode the simple offset from the beginning of the dictionary.
+This is easier to implement and has the potential to execute quicker.
+
+Similarly, attempts to include the ``is_literal`` flag in the huffman coding did not
+increase compression. An explicit ``is_literal`` flag made the code faster and simpler.
+
+.. _dictionary-initialization:
+
+Dictionary Initialization
+^^^^^^^^^^^^^^^^^^^^^^^^^
+For short messages, having a better initial dictionary can help improve compression ratios.
+The amount of improvement would be dependent on the type of data being compressed.
+Given that the contents of raw-binary data could be anything, we chose to focus on improving
+typical english text. In order to save device space, a whole dictionary is not saved to disk.
+Instead, we select 16 common characters appropriate for the ``literal`` bit width and
+pseudo-randomly fill up the dictionary. We use the XorShift32 pseudo-random number generator
+due to it's good randomness characteristics, and simple implementation.
+
+The character table is chosen based on the ``literal`` parameter:
+
+* **literal=7 or 8**: 16 common english text and markup characters:
+
+  .. code-block:: text
+
+       \x000ei>to<ans\nr/.
+      ^there is a "space" there.
+
+      (or as explicit hex values)
+      0x20 0x00 0x30 0x65 0x69 0x3E 0x74 0x6F 0x3C 0x61 0x6E 0x73 0x0A 0x72 0x2F 0x2E
+
+* **literal=5 or 6**: The 16 most common english characters
+  (``" etaoinshrdlcumw"``) downshifted to the target bit width by masking
+  with ``(1 << literal) - 1``. Since ASCII encodes letter position in
+  the low bits, this preserves alphabetic identity.
+
+.. warning::
+
+   When the ``extended`` header flag is *not* set (v1 format), ``literal`` is
+   always treated as 8 for backwards compatibility, regardless of the configured
+   value.
+
+The chosen seed, 3758097560, was discovered experimentally to give typically good results for 7/8 bit data.
+
+All of this amounts to a few percent compression improvement for short messages.
+
+.. code-block:: python
+
+   def _xorshift32(seed):
+       while True:
+           seed ^= (seed << 13) & 0xFFFFFFFF
+           seed ^= (seed >> 17) & 0xFFFFFFFF
+           seed ^= (seed << 5) & 0xFFFFFFFF
+           yield seed
+
+
+   def initialize_dictionary(size, literal=8):
+       if literal <= 5:
+           chars = bytes([c & 0x1F for c in b" etaoinshrdlcumw"])
+       elif literal <= 6:
+           chars = bytes([c & 0x3F for c in b" etaoinshrdlcumw"])
+       else:
+           chars = b" \x000ei>to<ans\nr/."
+
+       def _gen_stream(xorshift32):
+           for _ in range(size >> 3):
+               value = next(xorshift32)
+               yield chars[value & 0x0F]
+               yield chars[value >> 4 & 0x0F]
+               yield chars[value >> 8 & 0x0F]
+               yield chars[value >> 12 & 0x0F]
+               yield chars[value >> 16 & 0x0F]
+               yield chars[value >> 20 & 0x0F]
+               yield chars[value >> 24 & 0x0F]
+               yield chars[value >> 28 & 0x0F]
+
+       return bytearray(_gen_stream(_xorshift32(3758097560)))
+
+Huffman Coding
+^^^^^^^^^^^^^^
+Huffman coding encodes high-probability values with less bits, and less-likely values with more bits.
+In order for huffman coding to work, no encoding is allowed to be a prefix of another encoding.
+If all values have equal probability, simple binary encoding is more efficient.
+
+The following maps the pattern-size (to be added to the minimum pattern-length)
+to the bits representing the huffman code.
+
+.. code-block:: python
+
+   huffman_coding = {
+       0: 0b0,
+       1: 0b11,
+       2: 0b1000,
+       3: 0b1011,
+       4: 0b10100,
+       5: 0b100100,
+       6: 0b100110,
+       7: 0b101011,
+       8: 0b1001011,
+       9: 0b1010100,
+       10: 0b10010100,
+       11: 0b10010101,
+       12: 0b10101010,
+       13: 0b100111,
+       "FLUSH": 0b10101011,
+   }
+
+
+The match-size probabilities that generated this table were generated over the enwik8 dataset.
+This huffman coding was chosen such that the longest huffman code is 8 bits long, making it easier to store and index into.
+The maximum match-size is more likely than the second-highest match-size because all match-sizes greater than the maximum size get down-mapped.
+
+.. image:: ../../assets/match-size-plot.png
+   :alt: Match Size Plot
+
+For any given huffman coding schema, a equivalent coding can be obtained by inverting all the bits (reflecting the huffman tree). The single-bit, most common code ``0b0`` representing a pattern-size 2 is intentionally represented as ``0b0`` instead of ``0b1``. This makes the MSb of all other codes be 1, simplifying the decoding procedure because the number of bits read doesn't strictly have to be recorded.
+
+Extended Format (v2.0.0+)
+^^^^^^^^^^^^^^^^^^^^^^^^^
+When the ``extended`` header bit is set, two additional token types are available:
+RLE (Run-Length Encoding) and Extended Match. These use Huffman symbols 12 and 13
+respectively, which in the basic format would represent match sizes ``min_pattern_size + 12``
+and ``min_pattern_size + 13``.
+
+Extended Huffman Encoding
+-------------------------
+Both RLE and Extended Match use a secondary Huffman encoding to represent their payload values.
+This encoding combines a Huffman code (without the literal flag) with trailing bits:
+
+1. Read the Huffman symbol (12 for RLE, 13 for Extended Match) with the literal flag (``0b0``).
+2. Decode an additional Huffman code (reusing the same table, but without the leading literal flag bit).
+   In this secondary context, symbol 14 (the FLUSH bit pattern ``0b10101011``) is a valid value,
+   giving Huffman indices 0 through 14.
+3. Read trailing bits (4 bits for RLE, 3 bits for Extended Match).
+4. Combine: ``value = (huffman_index << trailing_bits) + trailing_bits_value``
+
+RLE Token (Symbol 12)
+---------------------
+RLE encodes runs of repeated bytes efficiently. The repeated byte is implicitly
+the last byte written to the window buffer. If no bytes have been written yet
+(i.e., ``window_pos == 0``), the byte at position ``window_size - 1`` of the
+initial dictionary is used.
+
+- ``huffman_code[12]`` = ``0xAA`` (9 bits including literal flag)
+- ``count`` ranges from 2 to 241: ``(14 << 4) + 15 + 2 = 241``
+
+Window update: Only the first 8 bytes are written to the dictionary (no wrap-around).
+If fewer than 8 bytes remain before the end of the window buffer, only those bytes
+are written. Writing only 8 bytes preserves useful dictionary content for future
+pattern matches, since filling the window with a single repeated byte would reduce
+match opportunities.
+
+.. code-block:: text
+
+   RLE Token Structure:
+   +---+------------+----------------------------+
+   | 0 | huffman[12]| extended_huffman(count - 2) |
+   +---+------------+----------------------------+
+   |1b |   8 bits   | (1 ~ 8) + 4 bits           |
+   +---+------------+----------------------------+
+
+Extended Match Token (Symbol 13)
+--------------------------------
+Extended Match allows pattern matches longer than the basic format's maximum of
+``min_pattern_size + 13``. It is used when a match exceeds ``min_pattern_size + 11``.
+
+- ``huffman_code[13]`` = ``0x27`` (7 bits including literal flag)
+- ``offset`` is ``window`` bits, pointing to the start of the pattern
+- Maximum extra size: ``(14 << 3) + 7 + 1 = 120``
+- Maximum total match size: ``min_pattern_size + 11 + 120 = min_pattern_size + 131``
+
+The ``-12`` offset ensures extended matches start at ``min_pattern_size + 12``, leaving
+symbols 0-11 for basic matches (0-11 maps to ``min_pattern_size`` through ``min_pattern_size + 11``).
+
+Window constraints: The source pattern cannot span past the window buffer boundary;
+the compressor terminates extended matches early if they would cross this boundary.
+Similarly, destination writes do not wrap-around; only bytes up to the end of the
+window buffer are written. This simplifies implementation while having minimal
+impact on compression ratio (approximately 0.02% loss).
+
+.. code-block:: text
+
+   Extended Match Token Structure:
+   +---+------------+-------------------------+--------+
+   | 0 | huffman[13]| extended_huffman(sz)     | offset |
+   +---+------------+-------------------------+--------+
+   |1b |   6 bits   | (1 ~ 8) + 3 bits        | window |
+   +---+------------+-------------------------+--------+
+
+   Where sz = match_size - min_pattern_size - 12
+
+Flush Symbol
+------------
+A special FLUSH symbol is encoded as the least likely Huffman code.
+In many compression algorithms, a ``flush()`` can only be called at the end of the
+compression stream, and the compressor cannot be used anymore.
+In microcontroller applications, the user may want to flush the compressor buffer
+while still continuing to compress more data. Examples include:
+
+1. Flushing a chunk of logs to disk to prepare if power is removed.
+
+2. Pushing a chunk of collected data to a remote server.
+
+Since the output bit stream must be byte-aligned for writing, there may be up to 7
+pending bits that have not yet formed a complete byte.
+Invoking the ``flush`` method can have one of two results:
+
+1. If the output is already byte-aligned and ``more_header`` is not set,
+   no action is performed.
+
+2. If there are pending bits, or if ``more_header`` is set, the FLUSH Huffman
+   code is written.
+   No ``offset`` bits are written following the FLUSH code.
+   The remaining bits are zero-padded to the next byte boundary.
+
+On reading, if a FLUSH is read, the reader discards the remaining bits up to the
+next byte boundary.
+When ``more_header`` is set, a FLUSH is **always** emitted (even when byte-aligned)
+to support append mode (see `Dictionary Reset (Double-FLUSH)`_).
+In the worst case (1 pending bit), a FLUSH symbol (9 bits) and 6 padding bits are
+written, adding 15 bits of overhead to the output stream.
+
+
+Dictionary Reset (Double-FLUSH)
+-------------------------------
+Dictionary reset allows appending new compressed data to an existing stream
+without retaining the previous compressor state. After a reset, both sides
+start fresh with a default dictionary.
+
+When the ``more_header`` (header byte 1, bit 0) is set, two consecutive FLUSH tokens signal a dictionary reset.
+Without ``more_header``, double-FLUSHes are treated as two ordinary flushes.
+Old decompressors (<2.1.0) reject ``more_header`` streams at the header, preventing silent corruption.
+
+On the compressor side, ``reset_dictionary`` flushes pending data, writes
+exactly two consecutive FLUSHes, then re-initializes the window and all
+internal state.
+
+On the decompressor side:
+1. Re-initializes the window (see `Dictionary Initialization`_). Custom dictionaries cannot be supplied at this time.
+2. Resets window position to zero.
+3. Continues decompressing with a fresh dictionary.
+
+
+Miscellaneous
+^^^^^^^^^^^^^
+No terminating character is builtin. Tamp relies on external framing (such as from the filesystem)
+to know when the data stream is complete. The final byte of a stream is zero-padded. The maximum
+padding is 7 zero bits.

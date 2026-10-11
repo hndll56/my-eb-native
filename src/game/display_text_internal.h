@@ -1,0 +1,133 @@
+/*
+ * Display text system internal header.
+ *
+ * Shared declarations for display_text sub-files.
+ * NOT for external consumers — use display_text.h instead.
+ */
+#ifndef GAME_DISPLAY_TEXT_INTERNAL_H
+#define GAME_DISPLAY_TEXT_INTERNAL_H
+
+#include "game/display_text.h"
+#include "game/window.h"  /* for WindowInfo */
+#include "data/assets.h"
+#include "core/mode_stack.h"  /* ModeState/GameMode for cc_1f_dispatch's push-request */
+
+/* TextSource and ScriptReader are defined in game/display_text.h (included above)
+ * so the GAME_MODE_DISPLAY_TEXT ModeState in mode_stack.h can embed the reader. */
+
+/* ---- Script reader helpers (display_text.c) ---- */
+uint8_t script_read_byte(ScriptReader *r);
+uint16_t script_read_word(ScriptReader *r);
+uint32_t script_read_dword(ScriptReader *r);
+void script_skip(ScriptReader *r, int n);
+void resolve_text_jump(ScriptReader *r, uint32_t addr);
+
+/* ---- Data helpers (display_text.c) ---- */
+void toggle_hppp_flipout_mode(uint16_t enable);
+uint16_t is_escargo_express_full(void);
+uint16_t get_item_subtype_2(uint16_t item_id);
+void check_text_word_wrap(ScriptReader *reader);
+void cc_skip_args(ScriptReader *r, uint8_t cc);
+
+/* ---- CC table constants ---- */
+#define CC_TABLE_TYPE_STRING  0
+#define CC_TABLE_TYPE_INT     1
+
+/* ---- CC table stat printing (display_text.c) ---- */
+uintptr_t resolve_cc_table_data(uint16_t index, int *out_type, int *out_str_len);
+uint8_t get_cc_table_entry_size(uint16_t index);
+void print_cc_table_value(uint16_t index);
+void print_enemy_article(uint16_t mode);
+
+/* ---- PSI teleport destination table constants ---- */
+#define PSI_TELEPORT_DEST_NAME_LEN    25
+#define PSI_TELEPORT_DEST_ENTRY_SIZE  31
+#define PSI_TELEPORT_DEST_MAX_ENTRIES 17
+
+/* ---- Wallet / ATM constants ---- */
+#define WALLET_LIMIT  99999u
+#define ATM_LIMIT     9999999u
+
+/* ---- PSI teleport data (compile-time linked) ---- */
+#define psi_teleport_dest_data  ASSET_DATA(ASSET_DATA_PSI_TELEPORT_DEST_TABLE_BIN)
+#define psi_teleport_dest_size  ASSET_SIZE(ASSET_DATA_PSI_TELEPORT_DEST_TABLE_BIN)
+
+/* Build a child DISPLAY_TEXT init from a CALL_TEXT/gosub target address (mirrors
+ * display_text_from_addr -> display_text). Returns false if unresolvable. Used by
+ * CC_08 (display_text.c) and CC_1F_C0 (display_text_cc.c) to STEP_PUSH a nested
+ * GAME_MODE_DISPLAY_TEXT child instead of recursing on the C stack. */
+bool dt_make_child_init(ModeState *init, uint32_t addr);
+
+/* ---- Window helpers (display_text.c) ---- */
+WindowInfo *get_focus_window_info(void);
+/* party_selector_battle_prepare: BATTLE path (mode != 1) of the former
+ * party_character_selector — fills the GAME_MODE_CHAR_SELECT init (CSP_INIT phase,
+ * on_change = CS_ONCHANGE_PARTY_SELECT_SCRIPT) for a STEP_PUSH by cc_1a_dispatch. The
+ * input loop runs in mode_step_char_select (battle.c); the per-member script display
+ * is itself a STEP_PUSH, so no C-stack pump remains. The chosen member id is stored to
+ * working memory in the DT_RESUME_CC1A_BATTLE_SEL handler on POP. *out_init must be
+ * zeroed by the caller. */
+void party_selector_battle_prepare(uint32_t *script_ptrs, uint16_t mode,
+                                   uint16_t allow_cancel, ModeState *out_init);
+/* Overworld party-member selection (former party_character_selector mode==1):
+ * builds the selection window + menu items, fills the SELECTION_MENU child init for
+ * a STEP_PUSH, and returns the saved argument_memory to restore on resume.
+ * *out_window_id receives the created window to close on resume. The result-store
+ * and window/attr cleanup run in the DT_RESUME_CC1A_PARTY_SEL handler on POP. */
+uint32_t party_selector_overworld_prepare(uint16_t allow_cancel, ModeState *out_init,
+                                          uint16_t *out_window_id);
+
+/* ---- CC dispatch handlers (display_text_cc.c) ---- */
+void cc_set_event_flag(ScriptReader *r);
+void cc_clear_event_flag(ScriptReader *r);
+/* cc_18_dispatch: most sub-ops run inline and return false. Sub 0x08/0x09
+ * (SELECTION_MENU_*) instead fill out_init/out_mode (GAME_MODE_SELECTION_MENU to
+ * STEP_PUSH) and out_resume (DT_RESUME_CC18_SEL / DT_RESUME_CC18_SEL_RESTORE),
+ * and 0x08 also returns its cancel-jump target via *out_cancel_target. Returns
+ * true when a child push is requested. The caller (mode_step_display_text)
+ * zeroes *out_init before the call. */
+bool cc_18_dispatch(ScriptReader *r, ModeState *out_init, GameMode *out_mode,
+                    uint8_t *out_resume, uint32_t *out_cancel_target);
+void cc_19_dispatch(ScriptReader *r);
+/* cc_1a_dispatch: most sub-ops run inline and return false. Sub 0x00/0x01
+ * (PARTY_MEMBER_SELECTION_MENU) in OVERWORLD mode (mode byte == 1) instead fills
+ * out_init/out_mode (GAME_MODE_SELECTION_MENU to STEP_PUSH), out_resume
+ * (DT_RESUME_CC1A_PARTY_SEL), *out_window_id (window to close on POP) and
+ * *out_saved_argmem (argument_memory to restore on POP), and returns true. The
+ * battle path (mode != 1) stays inline-blocking (Phase B). The caller
+ * (mode_step_display_text) zeroes *out_init before the call. */
+bool cc_1a_dispatch(ScriptReader *r, ModeState *out_init, GameMode *out_mode,
+                    uint8_t *out_resume, uint16_t *out_window_id,
+                    uint32_t *out_saved_argmem);
+void cc_1b_dispatch(ScriptReader *r);
+/* cc_1c_dispatch: most sub-ops run inline and return false. Sub 0x08
+ * (window border flash, mode 1/2) instead fills out_init/out_mode
+ * (GAME_MODE_WINDOW_BORDER_ANIM to STEP_PUSH — no result to store) and returns
+ * true. The caller (mode_step_display_text) zeroes *out_init before the call. */
+bool cc_1c_dispatch(ScriptReader *r, ModeState *out_init, GameMode *out_mode);
+void cc_1d_dispatch(ScriptReader *r);
+/* cc_1e_dispatch: most sub-ops run inline and return false. Sub 0x09
+ * GIVE_EXPERIENCE with a level-up pending instead fills out_init/out_mode
+ * (GAME_MODE_LEVEL_UP to STEP_PUSH) and out_resume (DT_RESUME_NONE — gain_exp
+ * has no result to store) and returns true. The caller (mode_step_display_text)
+ * zeroes *out_init before the call. */
+bool cc_1e_dispatch(ScriptReader *r, ModeState *out_init, GameMode *out_mode,
+                    uint8_t *out_resume);
+/* cc_1f_dispatch: most sub-ops run inline and return false. The yielding
+ * sub-ops (0x23 trigger-battle, 0x52 number-select, 0x60 text-speed delay,
+ * 0x61 wait-for-actionscript, 0xD2 photographer) instead fill
+ * out_init/out_mode (the child to STEP_PUSH), out_resume (the
+ * DisplayTextResume post-work the parent owes on POP) and out_aux (a small
+ * per-resume carry: 0xD2's photo_id) and return true. The caller
+ * (mode_step_display_text) zeroes *out_init before the call. */
+bool cc_1f_dispatch(ScriptReader *r, ModeState *out_init, GameMode *out_mode,
+                    uint8_t *out_resume, uint16_t *out_aux);
+
+/* ---- Menu functions (display_text_menus.c) ---- */
+void show_character_inventory(uint16_t window_id, uint16_t char_source);
+/* open_store_menu / select_escargo_express_item / open_telephone_menu /
+ * display_telephone_contact_text are now run-to-completion modes
+ * (GAME_MODE_STORE_MENU / _ESCARGO_MENU / _TELEPHONE_MENU; mode_step_* declared
+ * in mode_stack.h), STEP_PUSHed from the CC dispatchers. */
+
+#endif /* GAME_DISPLAY_TEXT_INTERNAL_H */

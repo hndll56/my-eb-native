@@ -1,0 +1,220 @@
+name: JavaScript Package CI/CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.11.1). Leave empty to skip publishing.'
+        required: false
+        type: string
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths:
+      - 'wasm/**'
+      - 'tamp/_c_src/**'
+      - 'website/**'
+      - '.github/workflows/javascript.yaml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'wasm/**'
+      - 'tamp/_c_src/**'
+      - 'website/**'
+      - '.github/workflows/javascript.yaml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 'Build & Test'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: './wasm/package-lock.json'
+
+      - name: Setup Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.12
+          actions-cache-folder: 'emsdk-cache'
+
+      - name: Install dependencies
+        run: |
+          cd wasm
+          npm ci
+
+      - name: Build WebAssembly and JavaScript
+        run: |
+          cd wasm
+          npm run build
+
+      - name: Run linting
+        run: |
+          cd wasm
+          npm run lint
+
+      - name: Run type checking
+        run: |
+          cd wasm
+          npm run type-check
+
+      - name: Run tests
+        run: |
+          cd wasm
+          npm test
+
+      - name: Cache enwik8 dataset
+        uses: actions/cache@v4
+        with:
+          path: datasets/enwik8.zip
+          key: enwik8-dataset-v2
+
+      - name: Download enwik8 dataset
+        run: make download-enwik8
+
+      - name: Run enwik8 compression test
+        run: |
+          mkdir -p build
+          cd wasm
+          npm run test:enwik8
+
+      - name: Verify compressed file hash
+        run: |
+          cd build
+          HASH=$(sha256sum enwik8-js.tamp | cut -d' ' -f1)
+          echo "Compression hash: $HASH"
+          if [ "$HASH" != "d9d804c91b4dc5e81856db074760037040421cfa84e1ea211e16dde8c295ce6d" ]; then
+            echo "❌ Hash mismatch!"
+            echo "Expected: d9d804c91b4dc5e81856db074760037040421cfa84e1ea211e16dde8c295ce6d"
+            echo "Got:      $HASH"
+            exit 1
+          fi
+          echo "✅ Compression hash verified"
+
+      # Build minified version and upload as artifact for deploy/publish jobs
+      - name: Build minified version
+        run: |
+          cd wasm
+          npm run build:minified
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-build
+          path: |
+            wasm/dist/
+            wasm/build/
+          retention-days: 1
+
+  deploy-pages:
+    name: 'Deploy to GitHub Pages'
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-build
+          path: wasm/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: './wasm/package-lock.json'
+
+      - name: Install dependencies (for webpack)
+        run: |
+          cd wasm
+          npm ci
+
+      - name: Prepare Pages deployment with webpack
+        run: make website-build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './build/pages-deploy'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  publish:
+    name: 'Publish to npm'
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
+
+    permissions:
+      contents: read
+      id-token: write
+
+    environment:
+      name: npm-publish
+      url: https://www.npmjs.com/package/@brianpugh/tamp
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-build
+          path: wasm/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: './wasm/package-lock.json'
+
+      - name: Set package version
+        run: |
+          cd wasm
+          if [ -n "${{ inputs.version }}" ]; then
+            npm version "${{ inputs.version }}" --no-git-tag-version
+          else
+            npm version from-git --no-git-tag-version
+          fi
+
+      - name: Publish to npm
+        run: |
+          cd wasm
+          npm publish --provenance --access public --ignore-scripts

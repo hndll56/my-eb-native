@@ -1,0 +1,121 @@
+from libcpp cimport bool
+from libc.stdint cimport uint8_t, uint32_t
+
+cdef extern from "tamp/common.h":
+    ctypedef struct TampConf:
+        int window
+        int literal
+        bool use_custom_dictionary
+        bool extended  # Extended format (RLE, extended match). Read from header bit [1].
+        bool dictionary_reset  # Stream may contain double-FLUSH dictionary resets. Implied by header byte 1 bit [0] (more_header).
+        bool append  # Initialize for appending to an existing stream (FLUSH instead of header).
+        # The lazy_matching field is conditionally compiled based on TAMP_LAZY_MATCHING
+        # We declare it here, but accessing it when the macro is disabled will cause compile errors
+        # This is handled in the Cython code by always setting it when the struct is initialized
+        bool lazy_matching
+
+    ctypedef enum tamp_res:
+        # Normal/Recoverable status >= 0
+        TAMP_OK = 0,
+        TAMP_OUTPUT_FULL = 1,  # Wasn't able to complete action due to full output buffer.
+        TAMP_INPUT_EXHAUSTED = 2, # Wasn't able to complete action due to exhausted input buffer.
+
+        # Error Codes < 0
+        TAMP_ERROR = -1,  # Generic error
+        TAMP_EXCESS_BITS = -2,  # Provided symbol has more bits than conf->literal
+        TAMP_INVALID_CONF = -3,  # Invalid configuration parameters.
+        TAMP_OOB = -4,  # Out-of-bounds access detected in compressed data.
+
+    void tamp_initialize_dictionary(unsigned char *buffer, size_t size, uint8_t literal);
+    int compute_min_pattern_size(uint8_t window, uint8_t literal);
+
+
+cdef extern from "tamp/compressor.h":
+    ctypedef struct TampCompressor:
+        pass
+
+    tamp_res tamp_compressor_init(TampCompressor *compressor, const TampConf *conf, unsigned char *window);
+
+    void tamp_compressor_sink(
+            TampCompressor *compressor,
+            const unsigned char *input,
+            size_t input_size,
+            size_t *consumed_size
+            );
+
+    tamp_res tamp_compressor_poll(
+            TampCompressor *compressor,
+            unsigned char *output,
+            size_t output_size,
+            size_t *output_written_size
+            );
+
+    tamp_res tamp_compressor_flush(
+                    TampCompressor *compressor,
+                    unsigned char *output,
+                    size_t output_size,
+                    size_t *output_written_size,
+                    bool write_token
+                    ) nogil;
+
+    tamp_res tamp_compressor_compress(
+            TampCompressor *compressor,
+            unsigned char *output,
+            size_t output_size,
+            size_t *output_written_size,
+            const unsigned char *input,
+            size_t input_size,
+            size_t *input_consumed_size
+            ) nogil;
+
+    tamp_res tamp_compressor_reset_dictionary(
+            TampCompressor *compressor,
+            unsigned char *output,
+            size_t output_size,
+            size_t *output_written_size
+            );
+
+
+cdef extern from "tamp/compressor.h":
+    # setup.py only defines TAMP_MATCH_INDEX on targets that support it, and Cython can't
+    # conditionally compile, so the guard lives in C; the size is 0 where it's unavailable.
+    """
+    #if TAMP_MATCH_INDEX
+    #define tamp_py_match_index_size(window) TAMP_MATCH_INDEX_SIZE(window)
+    #define tamp_py_set_match_index(compressor, buffer) tamp_compressor_set_match_index(compressor, buffer)
+    #else
+    #define tamp_py_match_index_size(window) ((size_t)0)
+    #define tamp_py_set_match_index(compressor, buffer) ((void)0)
+    #endif
+    """
+    size_t tamp_py_match_index_size(int window)
+    void tamp_py_set_match_index(TampCompressor *compressor, void *buffer)
+
+
+cdef extern from "tamp/decompressor.h":
+    ctypedef struct TampDecompressor:
+        pass
+
+    tamp_res tamp_decompressor_read_header(
+            TampConf *conf,
+            const unsigned char *input,
+            size_t input_size,
+            size_t *input_consumed_size
+    );
+
+    tamp_res tamp_decompressor_init(
+            TampDecompressor *decompressor,
+            const TampConf *conf,
+            unsigned char *window,
+            uint8_t window_bits
+    );
+
+    tamp_res tamp_decompressor_decompress(
+            TampDecompressor *decompressor,
+            unsigned char *output,
+            size_t output_size,
+            size_t *output_written_size,
+            const unsigned char *input,
+            size_t input_size,
+            size_t *input_consumed_size
+    ) nogil;

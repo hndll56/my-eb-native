@@ -1,0 +1,299 @@
+# Regular tests
+#
+# Use this to ensure your tests are passing on every push and PR (skipped on
+# pushes which only affect documentation).
+#
+# You should make sure you run jobs on at least the *oldest* and the *newest*
+# versions of python that your codebase is intended to support.
+
+name: tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'wasm/**'
+      - 'website/**'
+  pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'wasm/**'
+      - 'website/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: 'Lint & Pre-commit'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+
+      - name: Install library
+        run: uv sync --extra cli --locked
+
+      - name: Cache pre-commit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit/
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Pre-commit run
+        run: |
+          source .venv/bin/activate
+          SKIP=wasm-eslint,wasm-npm-test,wasm-file-validation,typescript-check,package-json-lint pre-commit run --show-diff-on-failure --color=always --all-files
+
+  fetch-corpora:
+    # Download the external benchmark corpora (enwik8, silesia, micropython uf2) exactly
+    # once per cache lifetime and cache them, so the corpus-consuming jobs below restore
+    # instead of re-hitting the upstream hosts (mattmahoney.net, micropython.org).
+    name: 'Fetch corpora'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Cache corpora
+        uses: actions/cache@v4
+        id: cached-corpora
+        with:
+          path: datasets
+          key: corpora-enwik8-silesia-uf2-v1
+
+      - name: Download corpora
+        if: steps.cached-corpora.outputs.cache-hit != 'true'
+        run: make download-enwik8 download-silesia download-micropython
+
+  dataset-regression:
+    # Compresses the enwik8/silesia/uf2 corpora with the current implementation and
+    # asserts the output hashes to the recorded ground-truth values (see
+    # tests/test_dataset_regression.py). Replaces the old git-LFS ground-truth binaries.
+    name: 'Dataset regression'
+    needs: fetch-corpora
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Restore corpora
+        uses: actions/cache/restore@v4
+        id: cached-corpora
+        with:
+          path: datasets
+          key: corpora-enwik8-silesia-uf2-v1
+
+      - name: Download corpora (fallback if cache evicted)
+        if: steps.cached-corpora.outputs.cache-hit != 'true'
+        run: make download-enwik8 download-silesia download-micropython
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+
+      - name: Install library
+        run: uv sync --extra cli --locked
+
+      - name: Run dataset regression tests
+        run: |
+          source .venv/bin/activate
+          python -m pytest tests/test_dataset_regression.py -v
+
+  test:
+    name: 'Test Python ${{ matrix.python-version }}'
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+    env:
+      PYTHON: ${{ matrix.python-version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Install MicroPython
+        uses: BrianPugh/install-micropython@v2
+        with:
+          reference: v1.22.0
+
+      - name: Install library with sanitizers
+        run: |
+          TAMP_SANITIZE=1 uv sync --extra cli --reinstall-package tamp
+          echo "ASAN_OPTIONS=detect_leaks=0" >> $GITHUB_ENV
+          echo "UBSAN_OPTIONS=print_stacktrace=1" >> $GITHUB_ENV
+
+      - name: Run CPython tests with sanitizers
+        run: |
+          source .venv/bin/activate
+          # Dataset regression (large-corpus compression) runs in its own job; skip it here.
+          LD_PRELOAD=$(gcc -print-file-name=libasan.so) python -m pytest --no-dataset --cov=tamp --cov-report term --cov-report xml --junitxml=testresults.xml
+          coverage report
+
+      - name: Run MicroPython tests (reference implementation)
+        run: |
+          source .venv/bin/activate
+          belay run micropython -X heapsize=200M -m unittest $(find tests -name "test_*.py" ! -name "test_cli.py" ! -name "test_dataset_regression.py" ! -name "test_build_dictionary.py")
+
+      - name: Run C tests
+        run: make c-test
+
+      - name: Run C tests (embedded find_best_match)
+        run: make c-test-embedded
+
+      - name: Run C tests (match index vs. linear scan)
+        run: make c-test-match-index
+
+      - name: Verify CLI compression/decompression integrity
+        run: |
+          source .venv/bin/activate
+          # Use a smaller test file for quick integrity check (first 1MB of random data)
+          dd if=/dev/urandom of=/tmp/test_data.bin bs=1M count=1 2>/dev/null
+          original_hash=$(sha256sum /tmp/test_data.bin | cut -d' ' -f1)
+          LIBASAN_PATH=$(gcc -print-file-name=libasan.so)
+          roundtrip_hash=$(LD_PRELOAD="$LIBASAN_PATH" tamp compress /tmp/test_data.bin | LD_PRELOAD="$LIBASAN_PATH" tamp decompress | sha256sum | cut -d' ' -f1)
+          if [ "$original_hash" = "$roundtrip_hash" ]; then
+            echo "✓ Compression/decompression integrity verified"
+          else
+            echo "✗ Compression/decompression integrity check failed"
+            exit 1
+          fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unittests
+          env_vars: PYTHON
+          name: Python ${{ matrix.python-version }}
+
+      - name: Build HTML docs
+        if: matrix.python-version == '3.13'
+        run: |
+          source .venv/bin/activate
+          LD_PRELOAD=$(gcc -print-file-name=libasan.so) sphinx-build -b html docs/source/ docs/build/html
+
+  integrity-enwik8:
+    name: 'CLI Integrity (enwik8) - ${{ matrix.implementation }}'
+    needs: fetch-corpora
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        implementation: [desktop, embedded]
+    env:
+      EXPECTED_COMPRESSED_HASH: 'd9d804c91b4dc5e81856db074760037040421cfa84e1ea211e16dde8c295ce6d'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+
+      - name: Install library with sanitizers
+        run: |
+          if [ "${{ matrix.implementation }}" = "embedded" ]; then
+            # Full install: the embedded leg also runs the pytest dataset regression suite below.
+            TAMP_SANITIZE=1 TAMP_USE_EMBEDDED_MATCH=1 uv sync --extra cli --reinstall-package tamp
+          else
+            TAMP_SANITIZE=1 uv sync --no-default-groups --extra cli --reinstall-package tamp
+          fi
+
+      - name: Set sanitizer environment variables
+        run: |
+          echo "ASAN_OPTIONS=detect_leaks=0" >> $GITHUB_ENV
+          echo "UBSAN_OPTIONS=print_stacktrace=1" >> $GITHUB_ENV
+
+      - name: Restore corpora
+        uses: actions/cache/restore@v4
+        id: cached-corpora
+        with:
+          path: datasets
+          key: corpora-enwik8-silesia-uf2-v1
+
+      - name: Download enwik8 dataset (fallback if cache evicted)
+        if: steps.cached-corpora.outputs.cache-hit != 'true'
+        run: make download-enwik8
+
+      - name: Verify CLI compression/decompression integrity
+        run: |
+          source .venv/bin/activate
+          original_hash=$(sha256sum datasets/enwik8 | cut -d' ' -f1)
+          LIBASAN_PATH=$(gcc -print-file-name=libasan.so)
+
+          # Compress once and save to file (avoids compressing twice)
+          LD_PRELOAD="$LIBASAN_PATH" tamp compress datasets/enwik8 -o /tmp/enwik8.tamp
+
+          compressed_hash=$(sha256sum /tmp/enwik8.tamp | cut -d' ' -f1)
+          echo "Compressed hash: $compressed_hash"
+          if [ "$compressed_hash" = "$EXPECTED_COMPRESSED_HASH" ]; then
+            echo "✓ Compressed output hash verified"
+          else
+            echo "✗ Compressed output hash mismatch!"
+            echo "Expected: $EXPECTED_COMPRESSED_HASH"
+            echo "Got:      $compressed_hash"
+            exit 1
+          fi
+
+          roundtrip_hash=$(LD_PRELOAD="$LIBASAN_PATH" tamp decompress /tmp/enwik8.tamp | sha256sum | cut -d' ' -f1)
+          if [ "$original_hash" = "$roundtrip_hash" ]; then
+            echo "✓ Compression/decompression roundtrip verified"
+          else
+            echo "✗ Compression/decompression roundtrip failed"
+            echo "Original hash: $original_hash"
+            echo "Roundtrip hash: $roundtrip_hash"
+            exit 1
+          fi
+
+      - name: Run dataset regression tests (embedded find_best_match)
+        if: matrix.implementation == 'embedded'
+        # The recorded compressed-output SHA256s are implementation-independent,
+        # so this pins the embedded matcher's exact bitstream on every cached
+        # corpus (corpora missing from the cache are skipped by the test).
+        run: |
+          source .venv/bin/activate
+          LD_PRELOAD=$(gcc -print-file-name=libasan.so) python -m pytest tests/test_dataset_regression.py -v

@@ -1,0 +1,11 @@
+
+MOVEMENT_CODE_15:
+	LDA [$80],Y
+	TAX
+	INY
+	INY
+	LDA [$80],Y
+	STA __BSS_START__,X
+	INY
+	INY
+	RTS

@@ -1,0 +1,269 @@
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8", "cython>=3.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tamp"
+dynamic = ["version"]
+description = ""
+authors = [{name = "Brian Pugh"}]
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.9"
+# Be as loose as possible if writing a library.
+dependencies = []
+
+[project.optional-dependencies]
+cli = [
+    "cyclopts>=1.0.0",
+    "rich>=15.0.0",
+]
+
+[project.urls]
+homepage = "https://github.com/BrianPugh/tamp"
+repository = "https://github.com/BrianPugh/tamp"
+
+[project.scripts]
+tamp = "tamp.cli.main:run_app"
+
+[dependency-groups]
+dev = [
+    "coverage[toml]>=5.1",
+    "pre-commit>=2.16.0",
+    "pytest>=7.1.2",
+    "pytest-cov>=3.0.0",
+    "pytest-mock>=3.7.0",
+    "black>=23.1.0",
+    "belay>=0.21.3",
+    "tqdm>=4.68.2",
+    "matplotlib>=3.7.4",
+    "ipdb>=0.13.13",
+    "packaging>=26.1",
+    "mpremote>=1.20.0",
+    "cython>=3.2.8",
+    "pytest-subtests>=0.10.0",
+    "numpy>=1.24",
+    "pyelftools>=0.32,<0.33",
+]
+docs = [
+    "sphinx>=4.5.0",
+    "sphinx-rtd-theme>=3.0.0",
+    "gitpython>=3.1.50",
+    "sphinx-copybutton>=0.5.2",
+    "myst-parser[linkify]>=3.0.1,<4",
+]
+profile = [
+    "line-profiler<5.0.0",
+]
+
+[tool.uv]
+default-groups = ["dev", "docs"]
+# Rebuild the Cython extensions whenever their sources change.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "setup.py" },
+    { file = "tamp/*.pyx" },
+    { file = "tamp/*.pxd" },
+    { file = "tamp/_c_src/**/*" },
+]
+
+[tool.setuptools_scm]
+
+[tool.setuptools.packages.find]
+include = ["tamp*"]
+
+# Compiled extensions (*.so/*.pyd) are emitted by the ext_modules build and
+# included automatically; listing them here would also sweep in stale build
+# artifacts, so only source stubs are declared as package data.
+[tool.setuptools.package-data]
+tamp = ["py.typed", "*.pyi", "*.pyx", "*.pxd"]
+
+# Binary wheels ship the compiled *.so; the Cython/C sources they were built
+# from are dead weight there (~60% of the wheel). Strip them from the wheel.
+# The sdist is unaffected: its file list comes from setuptools-scm + MANIFEST.in,
+# not package-data, so it keeps the full source needed to build from scratch.
+[tool.setuptools.exclude-package-data]
+tamp = ["*.pyx", "*.pxd", "*.c", "*.h"]
+# setuptools files the hand-written sources under an auto-created
+# "tamp._c_src.tamp" package (named after the directory), so the "tamp" key above
+# misses them and ~130KB of C/H stayed in every wheel. Key them explicitly.
+"tamp._c_src.tamp" = ["*.c", "*.h"]
+
+[tool.belay]
+name = "tamp"
+ignore = [
+    "__pycache__",
+    "*.pyi",
+    "*.pyx",
+    "*.pxd",
+    "*.pyc",
+    "*.so",
+    "*.html",
+    "_c_src/",
+    "cli/",
+    "*.c",
+    "*.h",
+]
+
+[tool.belay.group.dev]
+optional = true
+
+[tool.belay.group.dev.dependencies]
+argparse = "https://github.com/micropython/micropython-lib/blob/master/python-stdlib/argparse/argparse.py"
+collections = [
+    "https://github.com/mattytrentini/micropython-lib/blob/deque-improvements/python-stdlib/collections.deque/collections/deque.py",
+    "https://github.com/micropython/micropython-lib/blob/master/python-stdlib/collections/collections/__init__.py",
+]
+fnmatch = "https://github.com/micropython/micropython-lib/blob/master/python-stdlib/fnmatch/fnmatch.py"
+pathlib = "https://github.com/micropython/micropython-lib/blob/master/python-stdlib/pathlib/pathlib.py"
+shutil = "https://github.com/micropython/micropython-lib/blob/master/python-stdlib/shutil/shutil.py"
+tempfile = "https://github.com/micropython/micropython-lib/blob/master/python-stdlib/tempfile/tempfile.py"
+unittest = [
+    "https://github.com/micropython/micropython-lib/blob/master/python-stdlib/unittest/unittest/__init__.py",
+    "https://github.com/micropython/micropython-lib/blob/master/python-stdlib/unittest-discover/unittest/__main__.py"
+]
+uprofiler = "https://github.com/BrianPugh/micropython-libs/blob/main/lib/uprofiler.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "tests/*",
+    "tamp/*_viper.py",
+    "tamp/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    # Have to re-enable the standard pragma
+    "pragma: no cover",
+
+    # Don't complain about missing debug-only code:
+    "def __repr__",
+    "if self.debug:",
+    "if debug:",
+    "if DEBUG:",
+
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+
+    # Don't complain if non-runnable code isn't run:
+    "if 0:",
+    "if False:",
+    "if __name__ == .__main__.:",
+    "def run_app",
+    "except ImportError",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff]
+target-version = 'py39'
+line-length = 120
+exclude = [
+    "migrations",
+    "__pycache__",
+    "manage.py",
+    "settings.py",
+    "env",
+    ".env",
+    "venv",
+    ".venv",
+]
+
+[tool.ruff.lint]
+unfixable = ["UP"]
+select = [
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "D",  # pydocstyle
+    "E",  # Error
+    "F",  # pyflakes
+    "I",  # isort
+    "ISC", # flake8-implicit-str-concat
+    "N",  # pep8-naming
+    "PGH",  # pygrep-hooks
+    "Q",  # flake8-quotes
+    "S",  # bandit
+    "SIM",  # flake8-simplify
+    "UP",  # pyupgrade
+    "W",  # Warning
+    "YTT", # flake8-2020
+]
+ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+    "D200",
+    "D205",
+    "D401",
+    "E402",
+    "E501",
+    "F401",
+    "SIM105",  # Use `contextlib.suppress(ImportError)` instead of try-except-pass
+    "SIM115",  # Use context handler for opening files
+    "B904",  # Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling
+    "UP018",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "chr",
+    "typer.Argument",
+    "typer.Option",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+"mpy_bindings/*.py" = [
+    "F821",  # Undefined names
+]
+"tamp/*_viper.py" = [
+    "F821",  # Undefined names (e.g. `ptr8`)
+]
+"tests/*.py" = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+    "S101",  # use of "assert"
+    "S102",  # use of "exec"
+    "S106",  # possible hardcoded password.
+    "S311",  # Standard pseudo-random generators are not suitable for cryptographic purposes
+    "PGH001",  # use of "eval"
+    "N806", # Variable in function should be lowercase; it sometimes makes sense if iterating over class constructors.
+]
+
+[tool.ruff.lint.pep8-naming]
+staticmethod-decorators = [
+    "pydantic.validator",
+    "pydantic.root_validator",
+]
+
+[tool.codespell]
+"ignore-words-list" = "ans,fo,hsi"
+
+[tool.creosote]
+ venvs=[".venv"]
+ paths=["tamp"]
+ deps-file="pyproject.toml"
+ sections=["project.dependencies", "project.optional-dependencies"]
+ exclude-deps =[
+   "rich",
+ ]
