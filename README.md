@@ -1,244 +1,112 @@
+<div align="center">
 
-# ebsrc
+# EarthBound Native
 
-An open-source reimplementation of **EarthBound** (US) / **Mother 2** (Japan) for the Super Nintendo — written in C, playable on modern platforms.
+**An experimental native-PC port and engine reimplementation inspired by EarthBound / Mother 2.**
 
-Play EarthBound natively on your PC, a Raspberry Pi Pico, or build a byte-perfect SNES ROM from the fully disassembled 65816 assembly. All game data is extracted from your own legally-obtained ROM — no copyrighted content is included in this repository.
+Building toward a stable, standalone game experience—with a focus on learning, portability, and a clean foundation.
 
-## Platforms
+<br>
 
-| Port | Directory | Status | Notes |
-|------|-----------|--------|-------|
-| **Desktop** (Windows, macOS, Linux) | `port/unix/` | Fully playable | SDL2, 60 FPS, audio, fast-forward |
-| **RP2040** (Pico LCD 1.3) | `port/waveshare/pico-lcd-1.3/` | Playable (no audio) | 240x240 ST7789 display, 9 inputs |
-| **SNES ROM** (assembly) | `asm/` | Complete | Reassembles a byte-perfect ROM |
-| **SNES ROM** (C back-port) | `port/snes/` | Scaffolding only | Goal: compile C back to 65816 |
+![Status](https://img.shields.io/badge/status-in%20development-orange?style=for-the-badge)
+![Language](https://img.shields.io/badge/language-C%20%2F%20C%2B%2B-blue?style=for-the-badge)
+![Platform](https://img.shields.io/badge/target-PC-lightgrey?style=for-the-badge)
 
-The C port is structured as a platform-agnostic game library (`src/`) that any port links against. Adding a new platform means implementing a thin `platform.h` interface — see [docs/porting-guide.md](docs/porting-guide.md).
+[Repository](https://github.com/hndll56/my-eb-native) · [Report a bug](https://github.com/hndll56/my-eb-native/issues) · [Licensing & provenance](LICENSING.md)
 
----
-
-## Quick Start: Desktop (Recommended)
-
-### 1. Install Prerequisites
-
-**macOS** (using [Homebrew](https://brew.sh)):
-```bash
-brew install cmake sdl2 pkg-config git
-```
-
-**Ubuntu / Debian Linux**:
-```bash
-sudo apt update
-sudo apt install cmake libsdl2-dev build-essential pkg-config git
-```
-
-**Fedora**:
-```bash
-sudo dnf install cmake SDL2-devel gcc pkg-config git
-```
-
-You also need **Python 3.10+** (pre-installed on most systems — check with `python3 --version`).
-
-### 2. Clone, Add Your ROM, and Build
-
-```bash
-git clone https://github.com/Herringfield/earthbound.git
-cd earthbound
-cp path/to/your/earthbound.sfc earthbound.sfc
-make unix
-```
-
-That's it! `make unix` automatically sets up the Python environment, extracts game assets from your ROM, and compiles the game. When it finishes, run:
-
-```bash
-./port/unix/build/earthbound
-```
-
-If any dependencies are missing, `make unix` will tell you exactly what to install.
-
-### Manual Build (Advanced)
-
-If you prefer to run each step yourself:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-ebtools extract
-cd port/unix
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-./build/earthbound
-```
+</div>
 
 ---
 
-## Controls
+## ✨ About the Project
 
-EarthBound was designed for comfortable one-handed play — many buttons are intentionally redundant.
+**EarthBound Native** is an experimental effort to bring an EarthBound-inspired game runtime to modern platforms. This repository builds on an existing EarthBound source-recreation project and is being developed incrementally, with engine stability taking priority over adding gameplay features too early.
 
-| Button | Function |
-|--------|----------|
-| **D-Pad** | Move character; navigate menus |
-| **A** | Confirm / interact / open command window |
-| **B** | Cancel / back; show HP/PP window on overworld |
-| **X** | Toggle town map (when obtained) |
-| **L** | "Check" / talk (like A, but prioritizes dialogue). Also confirms in menus |
-| **Select** | Same as B (one-handed play) |
-| **Start** | Start game from title screen |
-| **R** | Ring bicycle bell (cosmetic) |
+The long-term goal is to establish a reliable native foundation for the game: a consistent startup flow, usable menus and settings, dependable input handling, and—eventually—a working gameplay loop.
 
-**Minimum for hardware ports:** D-Pad + A + B is fully playable. Add X for the town map and Start for the title screen.
+> **Important:** This project is still a work in progress. The current engine shell can start and display the menu, options, and controls screens, but **the game is not playable yet**. Starting a new game is intentionally disabled while core functionality is being developed.
 
-**Two-button play (B + L):** Compile with `-DEB_B_OPENS_MAIN_MENU` to make B in the overworld open the full pause menu (Talk to / Goods / PSI / Equip / Check / Status) right after showing the HP/PP and money windows, so the A button isn't needed for overworld play. Useful for very constrained hardware ports.
+## 🚧 Current Status
 
-### Default Keyboard Mapping
+| Component | Status |
+|---|---|
+| Application startup / engine shell | Working |
+| Main menu | Available; being refined |
+| Options and controls screens | Available |
+| New Game / gameplay | Not implemented yet |
+| Full playthrough | Not playable yet |
+| Stability and testing | Active development |
 
-| Key | SNES Button |
-|-----|-------------|
-| Arrow keys | D-Pad |
-| X | A |
-| Z | B |
-| S | X |
-| A | Y |
-| Q | L |
-| W | R |
-| Enter | Start |
-| Right Shift | Select |
-| Tab | Fast-forward (4x speed) |
+These statuses describe the current state of this repository, not every capability of the upstream project it derives from.
 
----
+## 🎯 Development Priorities
 
-## Debug Hotkeys
+Development is focused on getting the fundamentals right before expanding scope:
 
-| Key | Action |
-|-----|--------|
-| F1  | Screenshot + VRAM/tile dump to `debug/` (BMP) |
-| F2  | VRAM tile visualization dump (4bpp + 2bpp BMPs) |
-| F3  | Toggle FPS / profiling overlay |
-| F4  | Dump full game state to `debug/state_NNN.bin` (~190KB, diff with `cmp`) |
-| F5  | Toggle in-game debug mode (`ow.debug_flag`) — enables debug menus |
+1. **Stability first** — fix startup, crashes, resource handling, and other core issues.
+2. **Reliable game foundation** — make the engine and game-state flow predictable and testable.
+3. **Menus and configuration** — refine the main menu, options, controls, and feedback.
+4. **Rendering quality** — improve pixel-art presentation with carefully tuned scaling and optional visual filters, without making the image blurry.
+5. **Debugging tools** — expose useful diagnostics and debug options for development.
+6. **Gameplay integration** — enable New Game only when the required game systems are ready.
 
-### FPS Overlay (F3)
+## 🖥️ Platform Goals
 
-A scanline-stamped overlay drawn in the in-game TINY font in the top-right corner. Because it writes directly into the rendered scanline buffer, it works identically on every port regardless of BG/tilemap state and uses integer-only math (shift-based IIR smoothing — no floating point).
+The immediate focus is a native desktop build. Additional platforms, including Android, may be explored as the engine becomes more stable. Platform support should be considered **experimental until it has been built and tested on the target device**.
 
-**Default rows** — `XX.X` values are in milliseconds; the FPS row is frames/second:
+| Platform | Status |
+|---|---|
+| Windows / desktop | Active development |
+| Linux / other desktop systems | Not yet confirmed for this project |
+| Android | Experimental / not yet confirmed |
 
-| Row | Color  | Meaning |
-|-----|--------|---------|
-| FPS | Green  | Frames per second over the recent window (target 60.0) |
-| LOG | Yellow | Game logic time per frame — fade, palette sync, script VM, NMI-equivalent work |
-| PPU | Orange | Software PPU render time per frame (BG/OBJ/window/composite) |
-| IDL | Gray   | Idle headroom remaining in the frame budget (`16.7ms − LOG − PPU`) |
+## 🛠️ Building and Testing
 
-`LOG + PPU + IDL ≈ 16.7ms` at 60 FPS. If `IDL` trends to 0 the port is CPU-bound for that frame; if `FPS` drops below 60 you're either CPU-bound or vsync is stalling.
+Build instructions may change while the project structure is being stabilized. Start by reviewing the repository's build files and any platform-specific documentation before compiling.
 
-**Optional rows:**
+When reporting a build or runtime issue, please include:
 
-- **SKP** (red when active, gray when idle) — appears only when the port is built with `MAX_FRAME_SKIP > 0` (e.g. the Pico port, `MAX_FRAME_SKIP=2`). Shows the length of the most recent run of skipped render frames. Dynamic frame-skipping drops PPU rendering while keeping game logic at real-time when the port falls behind schedule.
-- **CLR / BG / OBJ / WIN / CMP / SND** (cyan) — appear only in builds compiled with `-DPPU_PROFILE`. Per-section render time in tenths of a millisecond (so `BG 310` = 31.0 ms): clear, backgrounds, sprites, window/HDMA, BG/OBJ compositing, and the final scanline send to the platform.
+- Your operating system and architecture
+- The exact build command you ran
+- The complete error output or crash log
+- Steps to reproduce the issue
+- Whether the issue happens on a clean build
 
----
+**Please do not upload ROMs, copyrighted game assets, save files, or other proprietary game data to issues or pull requests.**
 
-## Building the Assembly ROM
+## 🧭 Project Background and Source Provenance
 
-If you want a reassembled SNES ROM for use with an emulator or flash cart, you'll need additional tools.
+This repository is derived from an existing EarthBound source-recreation effort. The known project lineage includes:
 
-### Additional Prerequisites
+- [Herringway/ebsrc](https://github.com/Herringway/ebsrc)
+- [BrianPugh/earthbound](https://github.com/BrianPugh/earthbound)
 
-- [ca65 v2.19+](https://github.com/cc65/cc65) — 65816 assembler (part of the cc65 suite)
-- [spcasm v1.1.0+](https://github.com/kleinesfilmroellchen/spcasm/) — SPC700 audio assembler
-- GNU make
+See [LICENSING.md](LICENSING.md) for the current licensing and source-provenance notes. The license status of inherited code has not been fully verified, so this repository does **not** claim that the entire codebase is covered by a blanket MIT license.
 
-### Build
+EarthBound / Mother 2 and its original game assets are the property of their respective rights holders. This is an independent, unofficial project and is not affiliated with or endorsed by Nintendo or the original rights holders.
 
-Make sure you've cloned the repo, installed ebtools, and extracted assets (steps 2–3 above), then from the repository root:
+## 🤝 Contributing
 
-**EarthBound (US Retail)**:
-```bash
-make
-```
+Contributions, bug reports, and technical discussion are welcome. At this stage, the most useful contributions help make the existing foundation more reliable.
 
-**Mother 2 (Japan)** — requires a Mother 2 ROM:
-```bash
-uv run ebtools extract mother2.yml "path/to/mother2.sfc"
-make mother2
-```
+- Reproduce and document bugs
+- Improve build reliability and portability
+- Add focused tests for core systems
+- Improve menus, input handling, and diagnostics
+- Keep changes small and explain how they were tested
 
-**US Localization Prototype (1995-03-27)** — requires the prototype ROM:
-```bash
-uv run ebtools extract earthbound-1995-03-27.yml "path/to/prototype.sfc"
-make proto19950327
-```
+Please check the current project state before proposing major features. Gameplay and platform support should not be described as complete unless they have been implemented and verified.
 
-Output goes to `build/` (e.g. `build/earthbound.sfc`).
+## 📜 License
+
+The licensing status of inherited source code is **under review**. Please read [LICENSING.md](LICENSING.md) before redistributing or relicensing code from this repository. Do not assume all files have the same license.
 
 ---
 
-## Modding & Asset Editing
+<div align="center">
 
-Game data lives in human-editable JSON files under `src/assets/` — items, enemies, NPCs, PSI, and more. Edit the JSON, rebuild, and your changes are packed into the game automatically.
+**A work in progress. Stability first, gameplay next.**
 
-Overworld sprites are extracted as indexed PNGs with JSON metadata. Custom sprites go in `src/custom_assets/overworld_sprites/png/` and override originals at build time. See [docs/editing-sprites.md](docs/editing-sprites.md) for the full guide.
+<sub>Unofficial community project · Built for experimentation and learning</sub>
 
----
-
-## Project Structure
-
-```
-src/                    Game library (platform-agnostic C)
-  core/                   Math, memory, decompression
-  entity/                 Entity system, scripts, sprites
-  game/                   Battle, text, overworld, inventory, audio
-  intro/                  Title screen, file select, naming
-  snes/                   Software PPU renderer, DMA, SPC700 emulator
-  platform/platform.h     Interface that ports implement
-
-port/
-  unix/                   Desktop port (SDL2) — Windows, macOS, Linux
-  waveshare/pico-lcd-1.3/ RP2040 embedded port
-  snes/                   SNES native port (scaffolding)
-
-asm/                    Complete 65816 disassembly, organized by subsystem
-  battle/  overworld/  text/  system/  audio/  ...
-
-docs/                   Guides: porting, assembly-to-C, sprites, assets
-```
-
----
-
-## Documentation
-
-- [Porting Guide](docs/porting-guide.md) — how to add a new platform port
-- [Assembly-to-C Guide](docs/assembly-to-c.md) — porting conventions, VUCC calling convention, worked examples
-- [Editing Overworld Sprites](docs/editing-sprites.md) — viewing, editing, and repacking sprites
-- [Asset Documentation](docs/assets.md) — game asset formats
-
----
-
-## Troubleshooting
-
-**"ebtools: command not found"** — Use `uv run ebtools` instead of bare `ebtools`, or activate the venv first: `source .venv/bin/activate` (macOS/Linux) or `.venv\Scripts\activate` (Windows).
-
-**"SDL2 not found" during cmake** — Install SDL2 dev libraries. macOS: `brew install sdl2`. Linux: `sudo apt install libsdl2-dev`.
-
-**"ca65: command not found"** — Install the cc65 suite. macOS: `brew install cc65`. Linux: [build from source](https://github.com/cc65/cc65).
-
-**Missing files in `asm/bin/`** — Run `ebtools extract` first. Assets must be extracted from your ROM before building.
-
----
-
-## Contributing
-
-Contributions are welcome! Current focus areas:
-
-- Bug fixes and visual glitches in the C port
-- Performance optimization (especially for embedded targets)
-- New platform ports
-- Better asset editing tools and formats
-
-# my-eb-native
-hmmmm
-
+</div>
