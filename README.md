@@ -1,3 +1,4 @@
+
 # ebsrc
 
 An open-source reimplementation of **EarthBound** (US) / **Mother 2** (Japan) for the Super Nintendo — written in C, playable on modern platforms.
@@ -237,3 +238,7 @@ Contributions are welcome! Current focus areas:
 - Performance optimization (especially for embedded targets)
 - New platform ports
 - Better asset editing tools and formats
+
+# my-eb-native
+hmmmm
+
