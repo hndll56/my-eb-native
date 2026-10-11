@@ -99,9 +99,68 @@ brew install git make cmake sdl2 pkg-config python
 
 Use Python 3.10 or newer.
 
+### Windows 10 / 11 (MSYS2 — experimental native build)
+
+If you want to try building a **native Windows executable** without WSL2, you can try [MSYS2](https://www.msys2.org/). This route is experimental and has **not been verified** for this repository; if it fails, use the WSL2 method below.
+
+1. Install MSYS2 from [msys2.org](https://www.msys2.org/).
+2. Open the **MSYS2 UCRT64** terminal from the Start menu (not the plain MSYS terminal).
+3. Update the package database and install the compiler and dependencies:
+
+   ```bash
+   pacman -Syu
+   ```
+
+   If the terminal asks you to close, reopen **UCRT64** and run the update again. Then install:
+
+   ```bash
+   pacman -S --needed git make cmake ninja pkgconf mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-pip
+   ```
+
+4. Clone the repository in the UCRT64 terminal and initialize submodules:
+
+   ```bash
+   cd ~
+   git clone https://github.com/hndll56/my-eb-native.git
+   cd my-eb-native
+   git submodule update --init --recursive
+   ```
+
+5. Put your legally obtained compatible US EarthBound ROM in the repository root as `earthbound.sfc`. Do not commit or upload the ROM or extracted copyrighted assets.
+6. Create a Python environment and install the project's asset tools:
+
+   ```bash
+   python -m venv .venv
+   source .venv/Scripts/activate
+   python -m pip install --upgrade pip
+   python -m pip install -e .
+   ebtools extract
+   ```
+
+7. Try configuring and building the desktop C port with CMake and Ninja:
+
+   ```bash
+   cmake -S port/unix -B port/unix/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+   cmake --build port/unix/build
+   ```
+
+8. If the build succeeds, launch it from the UCRT64 terminal:
+
+   ```bash
+   ./port/unix/build/earthbound.exe
+   ```
+
+   Run the tests with:
+
+   ```bash
+   ctest --test-dir port/unix/build --output-on-failure
+   ```
+
+**Important:** these commands are a best-effort MSYS2 experiment, not a guaranteed installation path. Windows-specific issues may require CMake, SDL2, or source changes. Please report the first error and full output if it fails. Do not describe this route as supported until it has been tested successfully.
+
 ### Windows 10 / 11 (using WSL2 + Ubuntu)
 
-The repository currently documents a Unix-style build, so the recommended Windows route is to build inside **WSL2** rather than running `make unix` directly in PowerShell.
+The repository's documented `make unix` workflow uses Unix shell features and a Unix-style Python virtual environment. The recommended, more conservative Windows route is to build inside **WSL2** rather than running `make unix` directly in PowerShell.
 
 1. Open **PowerShell as Administrator** and install WSL with Ubuntu:
 
