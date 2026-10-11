@@ -60,6 +60,96 @@ The immediate focus is a native desktop build. Additional platforms, including A
 | Linux / other desktop systems | Not yet confirmed for this project |
 | Android | Experimental / not yet confirmed |
 
+## ▶️ How to Use
+
+> **Current limitation:** the repository's native engine shell can open the main menu, options, and controls screens, but the game is **not playable yet**. The steps below explain how to prepare, build, and launch the current desktop version; they do not unlock gameplay.
+
+### 1. Get the source
+
+Install [Git](https://git-scm.com/), then open a terminal:
+
+```bash
+git clone https://github.com/hndll56/my-eb-native.git
+cd my-eb-native
+git submodule update --init --recursive
+```
+
+### 2. Install the build tools
+
+The current `make unix` workflow is designed for a Unix-like shell.
+
+**Ubuntu / Debian (including WSL2):**
+
+```bash
+sudo apt update
+sudo apt install git make cmake build-essential pkg-config libsdl2-dev python3 python3-venv python3-pip
+```
+
+**Fedora:**
+
+```bash
+sudo dnf install git make cmake gcc gcc-c++ pkgconf-pkg-config SDL2-devel python3
+```
+
+**macOS (with Homebrew):**
+
+```bash
+brew install git make cmake sdl2 pkg-config python
+```
+
+Use Python 3.10 or newer. On Windows, use **WSL2 with Ubuntu** for the documented build workflow; a native Windows build is not currently documented or verified here.
+
+### 3. Provide your own game ROM
+
+The build scripts extract game assets from a compatible US EarthBound ROM. Obtain the ROM independently and only if you are legally entitled to use it. Place it in the repository root and name it:
+
+```text
+earthbound.sfc
+```
+
+The ROM is not included in this repository. **Do not commit or upload the ROM or extracted copyrighted assets.**
+
+### 4. Build the desktop version
+
+From the repository root, run:
+
+```bash
+make unix
+```
+
+The Makefile checks dependencies, prepares the Python environment, extracts assets if needed, configures CMake, and compiles the desktop port. The first build can take a while.
+
+If the command fails, read the first error reported by the build and verify that all prerequisites above are installed.
+
+### 5. Launch the application
+
+After a successful build, run:
+
+```bash
+./port/unix/build/earthbound
+```
+
+The current shell is for development and testing. You can explore the screens that are implemented, but **New Game/gameplay is not available yet**.
+
+### 6. Run automated checks (optional)
+
+After building, run the available tests with:
+
+```bash
+ctest --test-dir port/unix/build --output-on-failure
+```
+
+This checks several engine/platform helpers and command-line self-tests; passing these tests does not mean the full game is playable.
+
+### Troubleshooting
+
+- **ROM not found:** confirm `earthbound.sfc` is in the repository root, next to the top-level `Makefile`.
+- **SDL2 development files missing:** install the SDL2 development package for your operating system.
+- **`make` or Python environment errors on Windows:** use the documented WSL2/Ubuntu workflow; the Unix Makefile is not a native PowerShell script.
+- **Build succeeds but the game is incomplete:** this is expected at the current development stage. Check [Current Status](#-current-status) for what is and is not implemented.
+
+---
+
 ## 🛠️ Building and Testing
 
 Build instructions may change while the project structure is being stabilized. Start by reviewing the repository's build files and any platform-specific documentation before compiling.
